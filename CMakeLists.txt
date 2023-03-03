@@ -24,7 +24,8 @@ cmake_minimum_required (VERSION 3.13)
 
 list (APPEND CMAKE_MODULE_PATH
   ${CMAKE_CURRENT_SOURCE_DIR}/cmake
-  ${CMAKE_CURRENT_BINARY_DIR})
+  ${CMAKE_CURRENT_BINARY_DIR}
+  ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 cmake_policy (SET CMP0090 NEW)
 if (POLICY CMP0135)
@@ -470,6 +471,63 @@ if (Seastar_DPDK)
   set (seastar_dpdk_obj seastar-dpdk.o)
 endif ()
 
+INCLUDE_DIRECTORIES(
+  ${BOOST_INCLUDE_DIRS}
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/web"
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/wt"
+  "${CMAKE_CURRENT_SOURCE_DIR}/src"
+  "${CMAKE_CURRENT_SOURCE_DIR}/include"
+  "${CMAKE_CURRENT_BINARY_DIR}"
+)
+
+MACRO (FILE_TO_STRING infile outfile var)
+ADD_CUSTOM_COMMAND(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${outfile}
+               COMMAND ${CMAKE_COMMAND}
+                   ARGS -Dinfile:FILEPATH=${CMAKE_CURRENT_SOURCE_DIR}/${infile}
+                        -Doutfile:FILEPATH=${CMAKE_CURRENT_BINARY_DIR}/${outfile}
+                        -Dvar:STRING=${var}
+                        -P ${CMAKE_CURRENT_SOURCE_DIR}/filetostring.cmake
+           MAIN_DEPENDENCY
+                ${CMAKE_CURRENT_SOURCE_DIR}/${infile}
+)
+ENDMACRO (FILE_TO_STRING)
+
+FILE_TO_STRING(src/web/skeleton/Plain.html    Plain_html.C      Plain_html)
+FILE_TO_STRING(src/web/skeleton/Hybrid.html   Hybrid_html.C     Hybrid_html)
+FILE_TO_STRING(src/web/skeleton/Boot.html     Boot_html.C       Boot_html)
+FILE_TO_STRING(src/web/skeleton/Wt.min.js Wt_js.C Wt_js)
+FILE_TO_STRING(src/web/skeleton/Boot.min.js Boot_js.C Boot_js)
+FILE_TO_STRING(src/js/WCartesianChart.min.js WCartesianChart_js.C WCartesianChart_js)
+FILE_TO_STRING(src/web/skeleton/jquery.min.js JQuery_js.C JQuery_js)
+
+FILE_TO_STRING(src/xml/wt.xml Wt_xml.C Wt_xml)
+FILE_TO_STRING(src/xml/auth_strings.xml AuthStrings_xml.C AuthStrings_xml)
+FILE_TO_STRING(src/xml/bootstrap_theme.xml BootstrapTheme_xml.C BootstrapTheme_xml)
+FILE_TO_STRING(src/xml/bootstrap3_theme.xml Bootstrap3Theme_xml.C Bootstrap3Theme_xml)
+FILE_TO_STRING(src/xml/bootstrap5_theme.xml Bootstrap5Theme_xml.C Bootstrap5Theme_xml)
+FILE_TO_STRING(src/xml/auth_css_theme.xml AuthCssTheme_xml.C AuthCssTheme_xml)
+
+add_definitions(-DWT_BUILDING)
+#add_definitions(-DWT_DATE_TZ_USE_STD)
+add_definitions(-DUSE_OS_TZDB=1)
+set(_TZ_BUILD_DEFS "")
+
+#IF (WIN32)
+#  set(_TZ_BUILD_DEFS USE_OS_TZDB=0 HAS_REMOTE_API=0)
+#ELSE (WIN32)
+  set(_TZ_BUILD_DEFS USE_OS_TZDB=1)
+#ENDIF (WIN32)
+
+IF (SHARED_LIBS)
+  list(APPEND _TZ_BUILD_DEFS DATE_BUILD_DLL)
+ELSE (SHARED_LIBS)
+  list(APPEND _TZ_BUILD_DEFS DATE_BUILD_LIB)
+ENDIF (SHARED_LIBS)
+
+set_source_files_properties(Wt/Date/src/tz.cpp PROPERTIES COMPILE_DEFINITIONS "${_TZ_BUILD_DEFS}")
+
+unset(_TZ_BUILD_DEFS)
+
 add_library (seastar
   ${http_chunk_parsers_file}
   ${http_request_parser_file}
@@ -739,6 +797,360 @@ add_library (seastar
   src/util/tmp_file.cc
   src/util/short_streams.cc
   src/websocket/server.cc
+
+  src/Wt/FlexLayoutImpl.h src/Wt/FlexLayoutImpl.C
+  src/Wt/FlexItemImpl.h src/Wt/FlexItemImpl.C
+  src/Wt/PopupWindow.h src/Wt/PopupWindow.C
+  src/Wt/Resizable.h src/Wt/Resizable.C
+  src/Wt/ResizeSensor.h src/Wt/ResizeSensor.C
+  src/Wt/ServerSideFontMetrics.h src/Wt/ServerSideFontMetrics.C
+  src/Wt/SizeHandle.h src/Wt/SizeHandle.C
+  src/Wt/StdGridLayoutImpl2.h src/Wt/StdGridLayoutImpl2.C
+  src/Wt/StdLayoutImpl.h src/Wt/StdLayoutImpl.C
+  src/Wt/StdLayoutItemImpl.h src/Wt/StdLayoutItemImpl.C
+  src/Wt/StdWidgetItemImpl.h src/Wt/StdWidgetItemImpl.C
+  src/Wt/Utils.h src/Wt/Utils.C
+  src/Wt/WAbstractArea.h src/Wt/WAbstractArea.C
+  src/Wt/WAbstractItemDelegate.h src/Wt/WAbstractItemDelegate.C
+  src/Wt/WAbstractItemModel.h src/Wt/WAbstractItemModel.C
+  src/Wt/WAbstractItemView.h src/Wt/WAbstractItemView.C
+  src/Wt/WAbstractListModel.h src/Wt/WAbstractListModel.C
+  src/Wt/WAbstractMedia.h src/Wt/WAbstractMedia.C
+  src/Wt/WAbstractProxyModel.h src/Wt/WAbstractProxyModel.C
+  src/Wt/WAbstractSpinBox.h src/Wt/WAbstractSpinBox.C
+  src/Wt/WAbstractTableModel.h src/Wt/WAbstractTableModel.C
+  src/Wt/WAbstractToggleButton.h src/Wt/WAbstractToggleButton.C
+  src/Wt/WAggregateProxyModel.h src/Wt/WAggregateProxyModel.C
+  src/Wt/WAnchor.h src/Wt/WAnchor.C
+  src/Wt/WAnimation.h src/Wt/WAnimation.C
+  src/Wt/WAny.h src/Wt/WAny.C
+  src/Wt/WApplication.h src/Wt/WApplication.C
+  src/Wt/WAudio.h src/Wt/WAudio.C
+  src/Wt/WBatchEditProxyModel.h src/Wt/WBatchEditProxyModel.C
+  src/Wt/WBootstrapTheme.h src/Wt/WBootstrapTheme.C
+  src/Wt/WBootstrap2Theme.h src/Wt/WBootstrap2Theme.C
+  src/Wt/WBootstrap3Theme.h src/Wt/WBootstrap3Theme.C
+  src/Wt/WBootstrap5Theme.h src/Wt/WBootstrap5Theme.C
+  src/Wt/WBorder.h src/Wt/WBorder.C
+  src/Wt/WBorderLayout.h src/Wt/WBorderLayout.C
+  src/Wt/WBoxLayout.h src/Wt/WBoxLayout.C
+  src/Wt/WBreak.h src/Wt/WBreak.C
+  src/Wt/WBrush.h src/Wt/WBrush.C
+  src/Wt/WButtonGroup.h src/Wt/WButtonGroup.C
+  src/Wt/WCalendar.h src/Wt/WCalendar.C
+  src/Wt/WCanvasPaintDevice.h src/Wt/WCanvasPaintDevice.C
+  src/Wt/WCheckBox.h src/Wt/WCheckBox.C
+  src/Wt/WCircleArea.h src/Wt/WCircleArea.C
+  src/Wt/WColor.h src/Wt/WColor.C
+  src/Wt/WColorPicker.h src/Wt/WColorPicker.C
+  src/Wt/WCombinedLocalizedStrings.h src/Wt/WCombinedLocalizedStrings.C
+  src/Wt/WComboBox.h src/Wt/WComboBox.C
+  src/Wt/WCompositeWidget.h src/Wt/WCompositeWidget.C
+  src/Wt/WContainerWidget.h src/Wt/WContainerWidget.C
+  src/Wt/WCssDecorationStyle.h src/Wt/WCssDecorationStyle.C
+  src/Wt/WCssStyleSheet.h src/Wt/WCssStyleSheet.C
+  src/Wt/WCssTheme.h src/Wt/WCssTheme.C
+  src/Wt/WDate.h src/Wt/WDate.C
+  src/Wt/WDateEdit.h src/Wt/WDateEdit.C
+  src/Wt/WDatePicker.h src/Wt/WDatePicker.C
+  src/Wt/WDateTime.h src/Wt/WDateTime.C
+  src/Wt/WDateValidator.h src/Wt/WDateValidator.C
+  src/Wt/WDefaultLoadingIndicator.h src/Wt/WDefaultLoadingIndicator.C
+  src/Wt/WDialog.h src/Wt/WDialog.C
+  src/Wt/WDoubleSpinBox.h src/Wt/WDoubleSpinBox.C
+  src/Wt/WDoubleValidator.h src/Wt/WDoubleValidator.C
+  src/Wt/WEnvironment.h src/Wt/WEnvironment.C
+  src/Wt/WEvent.h src/Wt/WEvent.C
+  src/Wt/WException.h src/Wt/WException.C
+  src/Wt/WFileDropWidget.h src/Wt/WFileDropWidget.C
+  src/Wt/WFileResource.h src/Wt/WFileResource.C
+  src/Wt/WFileUpload.h src/Wt/WFileUpload.C
+  src/Wt/WFitLayout.h src/Wt/WFitLayout.C
+  src/Wt/WFlashObject.h src/Wt/WFlashObject.C
+  src/Wt/WFont.h src/Wt/WFont.C
+  src/Wt/WFontMetrics.h src/Wt/WFontMetrics.C
+  src/Wt/WFormModel.h src/Wt/WFormModel.C
+  src/Wt/WFormWidget.h src/Wt/WFormWidget.C
+  src/Wt/WGLWidget.h src/Wt/WGLWidget.C
+  src/Wt/WAbstractGLImplementation.h src/Wt/WAbstractGLImplementation.C
+  src/Wt/WClientGLWidget.h src/Wt/WClientGLWidget.C
+  src/Wt/WGoogleMap.h src/Wt/WGoogleMap.C
+  src/Wt/WGradient.h src/Wt/WGradient.C
+  src/Wt/WGridLayout.h src/Wt/WGridLayout.C
+  src/Wt/WGroupBox.h src/Wt/WGroupBox.C
+  src/Wt/WHBoxLayout.h src/Wt/WHBoxLayout.C
+  src/Wt/WIcon.h src/Wt/WIcon.C
+  src/Wt/WIconPair.h src/Wt/WIconPair.C
+  src/Wt/WImage.h src/Wt/WImage.C
+  src/Wt/WInPlaceEdit.h src/Wt/WInPlaceEdit.C
+  src/Wt/WIntValidator.h src/Wt/WIntValidator.C
+  src/Wt/WInteractWidget.h src/Wt/WInteractWidget.C
+  src/Wt/WIOService.h src/Wt/WIOService.C
+  src/Wt/WLocale.h src/Wt/WLocale.C
+  src/Wt/WLocalDateTime.h src/Wt/WLocalDateTime.C
+  src/Wt/WIdentityProxyModel.h src/Wt/WIdentityProxyModel.C
+  src/Wt/WItemDelegate.h src/Wt/WItemDelegate.C
+  src/Wt/WItemSelectionModel.h src/Wt/WItemSelectionModel.C
+  src/Wt/WJavaScript.h src/Wt/WJavaScript.C
+  src/Wt/WJavaScriptExposableObject.h src/Wt/WJavaScriptExposableObject.C
+  src/Wt/WJavaScriptHandle.h src/Wt/WJavaScriptHandle.C
+  src/Wt/WJavaScriptObjectStorage.h src/Wt/WJavaScriptObjectStorage.C
+  src/Wt/WJavaScriptPreamble.h src/Wt/WJavaScriptPreamble.C
+  src/Wt/WJavaScriptSlot.h src/Wt/WJavaScriptSlot.C
+  src/Wt/WLabel.h src/Wt/WLabel.C
+  src/Wt/WLayout.h src/Wt/WLayout.C
+  src/Wt/WLayoutImpl.h src/Wt/WLayoutImpl.C
+  src/Wt/WLayoutItem.h src/Wt/WLayoutItem.C
+  src/Wt/WLayoutItemImpl.h src/Wt/WLayoutItemImpl.C
+  src/Wt/WLeafletMap.h src/Wt/WLeafletMap.C
+  src/Wt/WLength.h src/Wt/WLength.C
+  src/Wt/WLengthValidator.h src/Wt/WLengthValidator.C
+  src/Wt/WLineEdit.h src/Wt/WLineEdit.C
+  src/Wt/WLineF.h src/Wt/WLineF.C
+  src/Wt/WLink.h src/Wt/WLink.C
+  src/Wt/WLinkedCssStyleSheet.h src/Wt/WLinkedCssStyleSheet.C
+  src/Wt/WLoadingIndicator.h src/Wt/WLoadingIndicator.C
+  src/Wt/WLocalizedStrings.h src/Wt/WLocalizedStrings.C
+  src/Wt/WLogger.h src/Wt/WLogger.C
+  src/Wt/WLogSink.h src/Wt/WLogSink.C
+  src/Wt/WMatrix4x4.h src/Wt/WMatrix4x4.C
+  src/Wt/WMeasurePaintDevice.h src/Wt/WMeasurePaintDevice.C
+  src/Wt/WMediaPlayer.h src/Wt/WMediaPlayer.C
+  src/Wt/WMemoryResource.h src/Wt/WMemoryResource.C
+  src/Wt/WMenu.h src/Wt/WMenu.C
+  src/Wt/WMenuItem.h src/Wt/WMenuItem.C
+  src/Wt/WMessageBox.h src/Wt/WMessageBox.C
+  src/Wt/WMessageResourceBundle.h src/Wt/WMessageResourceBundle.C
+  src/Wt/WMessageResources.h src/Wt/WMessageResources.C
+  src/Wt/WModelIndex.h src/Wt/WModelIndex.C
+  src/Wt/WNavigationBar.h src/Wt/WNavigationBar.C
+  src/Wt/WObject.h src/Wt/WObject.C
+  src/Wt/WOverlayLoadingIndicator.h src/Wt/WOverlayLoadingIndicator.C
+  src/Wt/WPaintDevice.h src/Wt/WPaintDevice.C
+  src/Wt/WPaintedWidget.h src/Wt/WPaintedWidget.C
+  src/Wt/WPainter.h src/Wt/WPainter.C
+  src/Wt/WPainterPath.h src/Wt/WPainterPath.C
+  src/Wt/WPanel.h src/Wt/WPanel.C
+  src/Wt/WPen.h src/Wt/WPen.C
+  src/Wt/WPoint.h src/Wt/WPoint.C
+  src/Wt/WPointF.h src/Wt/WPointF.C
+  src/Wt/WPolygonArea.h src/Wt/WPolygonArea.C
+  src/Wt/WPopupMenu.h src/Wt/WPopupMenu.C
+  src/Wt/WPopupWidget.h src/Wt/WPopupWidget.C
+  src/Wt/WProgressBar.h src/Wt/WProgressBar.C
+  src/Wt/WPushButton.h src/Wt/WPushButton.C
+  src/Wt/WRadioButton.h src/Wt/WRadioButton.C
+  src/Wt/WRandom.h src/Wt/WRandom.C
+  src/Wt/WReadOnlyProxyModel.h src/Wt/WReadOnlyProxyModel.C
+  src/Wt/WRectArea.h src/Wt/WRectArea.C
+  src/Wt/WRectF.h src/Wt/WRectF.C
+  src/Wt/WRegExpValidator.h src/Wt/WRegExpValidator.C
+  src/Wt/WResource.h src/Wt/WResource.C
+  src/Wt/WSelectionBox.h src/Wt/WSelectionBox.C
+  src/Wt/WServer.h src/Wt/WServer.C
+  src/Wt/WShadow.h src/Wt/WShadow.C
+  src/Wt/WSignal.h src/Wt/WSignal.C
+  src/Wt/WSlider.h src/Wt/WSlider.C
+  src/Wt/WSocketNotifier.h src/Wt/WSocketNotifier.C
+  src/Wt/WSortFilterProxyModel.h src/Wt/WSortFilterProxyModel.C
+  src/Wt/WSpinBox.h src/Wt/WSpinBox.C
+  src/Wt/WSplitButton.h src/Wt/WSplitButton.C
+  src/Wt/WSound.h src/Wt/WSound.C
+  src/Wt/WSslCertificate.h src/Wt/WSslCertificate.C
+  src/Wt/WSslInfo.h src/Wt/WSslInfo.C
+  src/Wt/WStackedWidget.h src/Wt/WStackedWidget.C
+  src/Wt/WStandardItem.h src/Wt/WStandardItem.C
+  src/Wt/WStandardItemModel.h src/Wt/WStandardItemModel.C
+  src/Wt/WStatelessSlot.h src/Wt/WStatelessSlot.C
+  src/Wt/WString.h src/Wt/WString.C
+  src/Wt/WStreamResource.h src/Wt/WStreamResource.C
+  src/Wt/WStringListModel.h src/Wt/WStringListModel.C
+  src/Wt/WStringStream.h src/Wt/WStringStream.C
+  src/Wt/WStringUtil.h src/Wt/WStringUtil.C
+  src/Wt/WSuggestionPopup.h src/Wt/WSuggestionPopup.C
+  src/Wt/WSvgImage.h src/Wt/WSvgImage.C
+  src/Wt/WTabWidget.h src/Wt/WTabWidget.C
+  src/Wt/WTable.h src/Wt/WTable.C
+  src/Wt/WTableCell.h src/Wt/WTableCell.C
+  src/Wt/WTableColumn.h src/Wt/WTableColumn.C
+  src/Wt/WTableRow.h src/Wt/WTableRow.C
+  src/Wt/WTemplate.h src/Wt/WTemplate.C
+  src/Wt/WTemplateFormView.h src/Wt/WTemplateFormView.C
+  src/Wt/WTableView.h src/Wt/WTableView.C
+  src/Wt/WText.h src/Wt/WText.C
+  src/Wt/WTextArea.h src/Wt/WTextArea.C
+  src/Wt/WTextEdit.h src/Wt/WTextEdit.C
+  src/Wt/WTheme.h src/Wt/WTheme.C
+  src/Wt/WTime.h src/Wt/WTime.C
+  src/Wt/WTimeEdit.h src/Wt/WTimeEdit.C
+  src/Wt/WTimer.h src/Wt/WTimer.C
+  src/Wt/WTimerWidget.h src/Wt/WTimerWidget.C
+  src/Wt/WTimePicker.h src/Wt/WTimePicker.C
+  src/Wt/WTimeValidator.h src/Wt/WTimeValidator.C
+  src/Wt/WToolBar.h src/Wt/WToolBar.C
+  src/Wt/WTransform.h src/Wt/WTransform.C
+  src/Wt/WTree.h src/Wt/WTree.C
+  src/Wt/WTreeNode.h src/Wt/WTreeNode.C
+  src/Wt/WTreeTable.h src/Wt/WTreeTable.C
+  src/Wt/WTreeTableNode.h src/Wt/WTreeTableNode.C
+  src/Wt/WTreeView.h src/Wt/WTreeView.C
+  src/Wt/WValidator.h src/Wt/WValidator.C
+  src/Wt/WVBoxLayout.h src/Wt/WVBoxLayout.C
+  src/Wt/WVector3.h src/Wt/WVector3.C
+  src/Wt/WVector4.h src/Wt/WVector4.C
+  src/Wt/WVectorImage.h src/Wt/WVectorImage.C
+  src/Wt/WVideo.h src/Wt/WVideo.C
+  src/Wt/WVmlImage.h src/Wt/WVmlImage.C
+  src/Wt/WViewWidget.h src/Wt/WViewWidget.C
+  src/Wt/WVirtualImage.h src/Wt/WVirtualImage.C
+  src/Wt/WWebWidget.h src/Wt/WWebWidget.C
+  src/Wt/WWidget.h src/Wt/WWidget.C
+  src/Wt/WWidgetItem.h src/Wt/WWidgetItem.C
+  src/Wt/WWidgetItemImpl.h src/Wt/WWidgetItemImpl.C
+  src/Wt/Auth/AbstractPasswordService.h src/Wt/Auth/AbstractPasswordService.C
+  src/Wt/Auth/AbstractUserDatabase.h src/Wt/Auth/AbstractUserDatabase.C
+  src/Wt/Auth/AuthModel.h src/Wt/Auth/AuthModel.C
+  src/Wt/Auth/AuthService.h src/Wt/Auth/AuthService.C
+  src/Wt/Auth/AuthWidget.h src/Wt/Auth/AuthWidget.C
+  src/Wt/Auth/FacebookService.h src/Wt/Auth/FacebookService.C
+  src/Wt/Auth/FormBaseModel.h src/Wt/Auth/FormBaseModel.C
+  src/Wt/Auth/GoogleService.h src/Wt/Auth/GoogleService.C
+  src/Wt/Auth/HashFunction.h src/Wt/Auth/HashFunction.C
+  src/Wt/Auth/Identity.h src/Wt/Auth/Identity.C
+  src/Wt/Auth/Login.h src/Wt/Auth/Login.C
+  src/Wt/Auth/LostPasswordWidget.h src/Wt/Auth/LostPasswordWidget.C
+  src/Wt/Auth/OAuthService.h src/Wt/Auth/OAuthService.C
+  src/Wt/Auth/OAuthWidget.h src/Wt/Auth/OAuthWidget.C
+  src/Wt/Auth/passwdqc.h src/Wt/Auth/passwdqc_check.c
+  src/Wt/Auth/PasswordHash.h src/Wt/Auth/PasswordHash.C
+  src/Wt/Auth/PasswordPromptDialog.h src/Wt/Auth/PasswordPromptDialog.C
+  src/Wt/Auth/PasswordService.h src/Wt/Auth/PasswordService.C
+  src/Wt/Auth/PasswordStrengthValidator.h src/Wt/Auth/PasswordStrengthValidator.C
+  src/Wt/Auth/PasswordVerifier.h src/Wt/Auth/PasswordVerifier.C
+  src/Wt/Auth/RegistrationModel.h src/Wt/Auth/RegistrationModel.C
+  src/Wt/Auth/RegistrationWidget.h src/Wt/Auth/RegistrationWidget.C
+  src/Wt/Auth/Token.h src/Wt/Auth/Token.C
+  src/Wt/Auth/UpdatePasswordWidget.h src/Wt/Auth/UpdatePasswordWidget.C
+  src/Wt/Auth/User.h src/Wt/Auth/User.C
+  src/Wt/Auth/AuthUtils.h src/Wt/Auth/AuthUtils.C
+  src/Wt/Auth/MailUtils.h src/Wt/Auth/MailUtils.C
+  src/Wt/Auth/OAuthClient.h src/Wt/Auth/OAuthClient.C
+  src/Wt/Auth/OAuthTokenEndpoint.h src/Wt/Auth/OAuthTokenEndpoint.C
+  src/Wt/Auth/OidcUserInfoEndpoint.h src/Wt/Auth/OidcUserInfoEndpoint.C
+  src/Wt/Auth/OAuthAuthorizationEndpointProcess.h src/Wt/Auth/OAuthAuthorizationEndpointProcess.C
+  src/Wt/Auth/IssuedToken.h src/Wt/Auth/IssuedToken.C
+  src/Wt/Auth/OidcService.h src/Wt/Auth/OidcService.C
+  src/Wt/Chart/WAbstractChart.h src/Wt/Chart/WAbstractChart.C
+  src/Wt/Chart/WAbstractChartModel.h src/Wt/Chart/WAbstractChartModel.C
+  src/Wt/Chart/WAxis.h src/Wt/Chart/WAxis.C
+  src/Wt/Chart/WAxisSliderWidget.h src/Wt/Chart/WAxisSliderWidget.C
+  src/Wt/Chart/WDataSeries.h src/Wt/Chart/WDataSeries.C
+  src/Wt/Chart/WPieChart.h src/Wt/Chart/WPieChart.C
+  src/Wt/Chart/WCartesianChart.h src/Wt/Chart/WCartesianChart.C
+  src/Wt/Chart/WCartesian3DChart.h src/Wt/Chart/WCartesian3DChart.C
+  src/Wt/Chart/WAbstractChartImplementation.h src/Wt/Chart/WAbstractChartImplementation.C
+  src/Wt/Chart/WChart2DImplementation.h src/Wt/Chart/WChart2DImplementation.C
+  src/Wt/Chart/WChart3DImplementation.h src/Wt/Chart/WChart3DImplementation.C
+  src/Wt/Chart/WChartPalette.h src/Wt/Chart/WChartPalette.C
+  src/Wt/Chart/WStandardChartProxyModel.h src/Wt/Chart/WStandardChartProxyModel.C
+  src/Wt/Chart/WStandardPalette.h src/Wt/Chart/WStandardPalette.C
+  src/Wt/Chart/WStandardColorMap.h src/Wt/Chart/WStandardColorMap.C
+  src/Wt/Chart/WLegend.h src/Wt/Chart/WLegend.C
+  src/Wt/Chart/WLegend3D.h src/Wt/Chart/WLegend3D.C
+  src/Wt/Chart/WAbstractDataSeries3D.h src/Wt/Chart/WAbstractDataSeries3D.C
+  src/Wt/Chart/WAbstractGridData.h src/Wt/Chart/WAbstractGridData.C
+  src/Wt/Chart/WGridData.h src/Wt/Chart/WGridData.C
+  src/Wt/Chart/WEquidistantGridData.h src/Wt/Chart/WEquidistantGridData.C
+  src/Wt/Chart/WScatterData.h src/Wt/Chart/WScatterData.C
+  src/Wt/Chart/WSelection.h src/Wt/Chart/WSelection.C
+  src/Wt/Core/observable.hpp src/Wt/Core/observable.cpp
+  src/Wt/Core/observing_ptr.hpp src/Wt/Core/observing_ptr.cpp
+  src/Wt/cpp17/any.hpp src/Wt/cpp17/any/any.hpp
+  src/Wt/cpp20/date.hpp src/Wt/cpp20/tz.hpp
+  src/Wt/Date/date.h src/Wt/Date/include/date/date.h
+  src/Wt/Date/tz.h src/Wt/Date/include/date/tz.h src/Wt/Date/src/tz.cpp
+
+  src/Wt/Form/WAbstractFormDelegate.h src/Wt/Form/WAbstractFormDelegate.C
+  src/Wt/Form/WFormDelegate.h src/Wt/Form/WFormDelegate.C
+  src/Wt/Json/Array.h src/Wt/Json/Array.C
+  src/Wt/Json/Object.h src/Wt/Json/Object.C
+  src/Wt/Json/Parser.h src/Wt/Json/Parser.C
+  src/Wt/Json/Serializer.h src/Wt/Json/Serializer.C
+  src/Wt/Json/Value.h src/Wt/Json/Value.C
+  src/Wt/Http/HttpUtils.h src/Wt/Http/HttpUtils.C
+  src/Wt/Http/Client.h src/Wt/Http/Client.C
+  src/Wt/Http/Cookie.h src/Wt/Http/Cookie.C
+  src/Wt/Http/Message.h src/Wt/Http/Message.C
+  src/Wt/Http/Request.h src/Wt/Http/Request.C
+  src/Wt/Http/Response.h src/Wt/Http/Response.C
+  src/Wt/Http/ResponseContinuation.h src/Wt/Http/ResponseContinuation.C
+  src/Wt/Http/WtClient.h src/Wt/Http/WtClient.C
+  src/Wt/Mail/Client.h src/Wt/Mail/Client.C
+  src/Wt/Mail/Mailbox.h src/Wt/Mail/Mailbox.C
+  src/Wt/Mail/Message.h src/Wt/Mail/Message.C
+  src/Wt/Payment/Address.h src/Wt/Payment/Address.C
+  src/Wt/Payment/PayPal.h src/Wt/Payment/PayPal.C
+  src/Wt/Payment/Customer.h src/Wt/Payment/Customer.C
+  src/Wt/Payment/Money.h src/Wt/Payment/Money.C
+  src/Wt/Payment/Order.h src/Wt/Payment/Order.C
+  src/Wt/Payment/OrderItem.h src/Wt/Payment/OrderItem.C
+  src/Wt/Payment/Result.h src/Wt/Payment/Result.C
+  src/Wt/Render/Block.h src/Wt/Render/Block.C
+  src/Wt/Render/CssData.h src/Wt/Render/CssData.C
+  src/Wt/Render/CssData_p.h src/Wt/Render/CssData_p.C
+  src/Wt/Render/CssParser.h src/Wt/Render/CssParser.C
+  src/Wt/Render/Line.h src/Wt/Render/Line.C
+  src/Wt/Render/LayoutBox.h src/Wt/Render/LayoutBox.C
+  src/Wt/Render/RenderUtils.h src/Wt/Render/RenderUtils.C
+  src/Wt/Render/Specificity.h src/Wt/Render/Specificity.C
+  src/Wt/Render/WTextRenderer.h src/Wt/Render/WTextRenderer.C
+  src/Wt/Signals/signals.hpp src/Wt/Signals/signals.cpp
+  src/web/md5.h src/web/md5.c
+  src/web/sha1.h src/web/sha1.c
+  src/web/CgiParser.h src/web/CgiParser.C
+  src/web/Configuration.h src/web/Configuration.C
+  src/web/DomElement.h src/web/DomElement.C
+  src/web/EntryPoint.h src/web/EntryPoint.C
+  src/web/EscapeOStream.h src/web/EscapeOStream.C
+  src/web/FileServe.h src/web/FileServe.C
+  src/web/ColorUtils.h src/web/ColorUtils.C
+  src/web/ImageUtils.h src/web/ImageUtils.C
+  src/web/RefEncoder.h src/web/RefEncoder.C
+  src/web/SoundManager.h src/web/SoundManager.C
+  src/web/WebController.h src/web/WebController.C
+  src/web/WebMain.h src/web/WebMain.C
+  src/web/WebRequest.h src/web/WebRequest.C
+  src/web/WebStream.h src/web/WebStream.C
+  src/web/WebSession.h src/web/WebSession.C
+  src/web/WebSocketMessage.h src/web/WebSocketMessage.C
+  src/web/WebRenderer.h src/web/WebRenderer.C
+  src/web/WebUtils.h src/web/WebUtils.C
+  src/web/FileUtils.h src/web/FileUtils.C
+  src/web/PdfUtils.h src/web/PdfUtils.C
+  src/web/StringUtils.h src/web/StringUtils.cpp
+  src/web/TimeUtil.h src/web/TimeUtil.C
+  src/web/XSSFilter.h src/web/XSSFilter.C
+  src/web/XSSUtils.h src/web/XSSUtils.C
+  src/web/SslUtils.h src/web/SslUtils.C
+  src/web/UriUtils.h src/web/UriUtils.C
+  src/web/base64.h src/web/base64.cpp
+  src/web/SocketNotifier.h src/web/SocketNotifier.C
+  Plain_html.C
+  Boot_html.C
+  Hybrid_html.C
+  Boot_js.C
+  Wt_js.C
+  WCartesianChart_js.C
+  Wt_xml.C
+  AuthStrings_xml.C
+  BootstrapTheme_xml.C
+  Bootstrap3Theme_xml.C
+  Bootstrap5Theme_xml.C
+  AuthCssTheme_xml.C
+
+  src/Wt/Auth/bcrypt/crypt_blowfish.h src/Wt/Auth/bcrypt/crypt_blowfish.c
+  src/Wt/Auth/bcrypt/crypt_gensalt.h src/Wt/Auth/bcrypt/crypt_gensalt.c
+  src/Wt/Auth/bcrypt/wrapper.c
   )
 
 add_library (Seastar::seastar ALIAS seastar)
@@ -759,7 +1171,7 @@ target_include_directories (seastar
 set (Seastar_PRIVATE_CXX_FLAGS
   -UNDEBUG
   -Wall
-  -Werror
+  #-Werror
   -Wno-array-bounds # Disabled because of https://gcc.gnu.org/bugzilla/show_bug.cgi?id=93437
   -Wno-error=deprecated-declarations)
 if (NOT BUILD_SHARED_LIBS)
@@ -777,6 +1189,7 @@ target_link_libraries (seastar
     Boost::boost
     Boost::program_options
     Boost::thread
+    Boost::filesystem
     c-ares::cares
     cryptopp::cryptopp
     fmt::fmt
