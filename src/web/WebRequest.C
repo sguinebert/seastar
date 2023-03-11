@@ -26,6 +26,7 @@
 #else
 #include <boost/spirit/include/classic_core.hpp>
 #include <boost/spirit/include/classic_attribute.hpp>
+#include <boost/spirit/home/x3.hpp>
 #endif
 
 #endif // WT_NO_SPIRIT
@@ -136,26 +137,26 @@ bool WebRequest::detectDisconnect(const DisconnectCallback& callback)
   return false; /* Not implemented */
 }
 
-const char *WebRequest::userAgent() const
+std::string_view WebRequest::userAgent() const
 {
   return headerValue("User-Agent");
 }
 
-const char *WebRequest::referer() const
+std::string_view WebRequest::referer() const
 {
   return headerValue("Referer");
 }
 
-const char *WebRequest::contentType() const
+std::string_view WebRequest::contentType() const
 {
   return envValue("CONTENT_TYPE");
 }
 
 ::int64_t WebRequest::contentLength() const
 {
-  const char *lenstr = envValue("CONTENT_LENGTH");
+  auto lenstr = envValue("CONTENT_LENGTH");
 
-  if (!lenstr || strlen(lenstr) == 0)
+  if (lenstr.empty() || lenstr.data() == 0)
     return 0;
   else {
     try {
@@ -194,8 +195,9 @@ WebRequest::getParameterValues(const std::string& name) const
 namespace {
 #if BOOST_VERSION < 103600
   using namespace boost::spirit;
+using namespace boost::spirit::classic;
 #else
-  using namespace boost::spirit::classic;
+  using namespace boost::spirit;
 #endif
 
   using namespace boost;
@@ -209,7 +211,8 @@ namespace {
    *
    * And store the values with indicated qualities.
    */
-  class ValueListParser : public grammar<ValueListParser>
+  #if BOOST_VERSION < 103600
+  class ValueListParser : public spirit::classic::grammar<ValueListParser>
   {
   public:
     struct Value {
@@ -266,23 +269,58 @@ namespace {
           ;
       }
 
-      rule<ScannerT> option, value, valuelist;
+      spirit::classic::rule<ScannerT> option, value, valuelist;
 
-      rule<ScannerT> const& start() const { return valuelist; }
+      spirit::classic::rule<ScannerT> const& start() const { return valuelist; }
     };
   };
+////////////////
+#endif
 }
 
-std::string WebRequest::parsePreferredAcceptValue(const char *str) const
+std::string WebRequest::parsePreferredAcceptValue(const std::string_view str) const
 {
-  if (!str)
+
+  if (str.empty())
     return std::string();
 
+  std::vector<std::string_view> languages_;
+  std::vector<double> quality_;
+
+  auto f1 = [&] (auto& ctx) { quality_.push_back(x3::_attr(ctx)); };
+  const auto option = ((-x3::lit('q')| -x3::lit('Q')) >> -x3::lit('=') >> x3::double_)
+                          [f1]
+                      | (x3::alpha >> *x3::alnum >> '=' >> +x3::alnum);
+
+  auto f2 = [&] (auto& ctx) { auto it = x3::_attr(ctx); std::string_view view(it.begin(), it.size()); languages_.push_back(view); };
+  const auto language = x3::raw[x3::lexeme[(x3::alpha >> +(x3::alnum | x3::char_('-'))) | x3::char_('*')]]
+                               [f2]
+                        >> -(x3::lit(';') >> option | x3::attr(1.0) [f1]) ;
+
+  if(x3::phrase_parse(str.begin(), str.end(), language % ',', x3::space))
+  {
+    unsigned best = 0;
+    for (unsigned i = 1; i < quality_.size(); ++i) {
+        if (quality_[i] > quality_[best])
+            best = i;
+    }
+    if (best < languages_.size())
+        return std::string(languages_[best]);
+    else
+        return std::string();
+
+  }else {
+    LOG_ERROR("Could not parse 'Accept-Language: " << str
+                                                   << "', stopped at: '"  << '\'');
+    return std::string();
+  }
+
+#if BOOST_VERSION < 103600
   std::vector<ValueListParser::Value> values;
 
   ValueListParser valueListParser(values);
-
-  parse_info<> info = parse(str, valueListParser, space_p);
+  auto cc = std::string(str);
+  parse_info<> info = parse(cc.c_str(), valueListParser, space_p);
 
   if (info.full) {
     unsigned best = 0;
@@ -300,6 +338,7 @@ std::string WebRequest::parsePreferredAcceptValue(const char *str) const
               << "', stopped at: '" << info.stop << '\'');
     return std::string();
   }
+#endif
 }
 #else
 std::string WebRequest::parsePreferredAcceptValue(const char *str) const
@@ -369,16 +408,16 @@ const std::vector<std::pair<std::string, std::string> > &WebRequest::urlParams()
 
 std::string WebRequest::clientAddress(const Configuration &conf) const
 {
-  std::string remoteAddr = str(envValue("REMOTE_ADDR"));
+  std::string remoteAddr = std::string(envValue("REMOTE_ADDR"));
   if (conf.behindReverseProxy()) {
     // Old, deprecated behavior
-    std::string clientIp = str(headerValue("Client-IP"));
+    std::string clientIp = std::string(headerValue("Client-IP"));
 
     std::vector<std::string> ips;
     if (!clientIp.empty())
       boost::split(ips, clientIp, boost::is_any_of(","));
 
-    std::string forwardedFor = str(headerValue("X-Forwarded-For"));
+    std::string forwardedFor = std::string(headerValue("X-Forwarded-For"));
 
     std::vector<std::string> forwardedIps;
     if (!forwardedFor.empty())
@@ -398,7 +437,7 @@ std::string WebRequest::clientAddress(const Configuration &conf) const
     return remoteAddr;
   } else {
     if (conf.isTrustedProxy(remoteAddr)) {
-      std::string forwardedFor = str(headerValue(conf.originalIPHeader().c_str()));
+      std::string forwardedFor = std::string(headerValue(conf.originalIPHeader().c_str()));
       boost::trim(forwardedFor);
       std::vector<std::string> forwardedIps;
       boost::split(forwardedIps, forwardedFor, boost::is_any_of(","));
@@ -424,11 +463,11 @@ std::string WebRequest::clientAddress(const Configuration &conf) const
 
 std::string WebRequest::hostName(const Configuration &conf) const
 {
-  std::string host = str(headerValue("Host"));
+  std::string host = std::string(headerValue("Host"));
 
   if (conf.behindReverseProxy() ||
       conf.isTrustedProxy(remoteAddr())) {
-    std::string forwardedHost = str(headerValue("X-Forwarded-Host"));
+    auto forwardedHost = (headerValue("X-Forwarded-Host"));
 
     if (!forwardedHost.empty()) {
       std::string::size_type i = forwardedHost.rfind(',');
@@ -447,13 +486,13 @@ std::string WebRequest::urlScheme(const Configuration &conf) const
 {
   if (conf.behindReverseProxy() ||
       conf.isTrustedProxy(remoteAddr())) {
-    std::string forwardedProto = str(headerValue("X-Forwarded-Proto"));
+    std::string forwardedProto = std::string(headerValue("X-Forwarded-Proto"));
     if (!forwardedProto.empty()) {
       std::string::size_type i = forwardedProto.rfind(',');
       if (i == std::string::npos)
         return forwardedProto;
       else
-        return forwardedProto.substr(i+1);
+        return forwardedProto.substr(i + 1);
     }
   }
 

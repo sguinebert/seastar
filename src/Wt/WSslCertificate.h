@@ -184,7 +184,7 @@ class WT_API WSslCertificate
 
   std::string gdb() const;
 
-  static std::vector<DnAttribute> dnFromString(const std::string &dnStr);
+  static std::vector<DnAttribute> dnFromString(std::string_view dn);
 
  private:
   std::vector<DnAttribute>                 subjectDn_;

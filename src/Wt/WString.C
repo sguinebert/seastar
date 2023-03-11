@@ -725,6 +725,23 @@ bool operator== (const std::string& lhs, const WString& rhs)
   return WString(lhs) == rhs;
 }
 
+WString operator+ (const WString& lhs, std::string_view rhs)
+{
+  WString result = lhs;
+  return result += rhs.data();
+}
+
+WString operator+ (std::string_view lhs, const WString& rhs)
+{
+  WString result = lhs.data();
+  return result += rhs;
+}
+
+bool operator== (std::string_view lhs, const WString& rhs)
+{
+  return rhs == lhs.data();
+}
+
 bool operator== (const std::wstring& lhs, const WString& rhs)
 {
   return WString(lhs) == rhs;

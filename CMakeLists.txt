@@ -798,6 +798,8 @@ add_library (seastar
   src/util/short_streams.cc
   src/websocket/server.cc
 
+  src/http/Configuration.h src/http/Configuration.C
+  src/http/uWSRequest.h src/http/uWSRequest.C
   src/Wt/FlexLayoutImpl.h src/Wt/FlexLayoutImpl.C
   src/Wt/FlexItemImpl.h src/Wt/FlexItemImpl.C
   src/Wt/PopupWindow.h src/Wt/PopupWindow.C

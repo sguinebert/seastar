@@ -66,6 +66,9 @@ namespace {
   inline std::string str(const char *v) {
     return v ? std::string(v) : std::string();
   }
+  inline std::string str(std::string_view v) {
+    return std::string(v);
+  }
 
   inline bool isEqual(const char *s1, const char *s2) {
 #ifdef WT_TARGET_JAVA
@@ -435,11 +438,11 @@ void WebSession::init(const WebRequest& request)
     bookmarkUrl_ = applicationUrl_;
   }
 
-  std::string path = request.pathInfo();
+  auto path = request.pathInfo();
   if (path.empty() && hashE)
     path = *hashE;
 
-  env_->setInternalPath(path);
+  env_->setInternalPath(str(path));
   pagePathInfo_ = request.pathInfo();
 
   // Cache document root
@@ -1285,7 +1288,7 @@ void WebSession::handleRequest(Handler& handler)
 
   Configuration& conf = controller_->configuration();
 
-  const char *origin = request.headerValue("Origin");
+  auto origin = request.headerValue("Origin");
   if (request.isWebSocketRequest()) {
     std::string trustedOrigin = env_->urlScheme() + "://" + env_->hostName();
     // Allow new WebSocket connection:
@@ -1293,13 +1296,13 @@ void WebSession::handleRequest(Handler& handler)
     //  - It is the same as the current host
     //  - or we are using WidgetSet mode and the origin is allowed
     // - Wt session id matches
-    if (origin && (trustedOrigin == origin ||
+    if ((trustedOrigin == origin ||
                    (type() == EntryPointType::WidgetSet && conf.isAllowedOrigin(origin))) &&
         wtdE && *wtdE == sessionId_) {
       // OK
     } else {
       // Not OK
-      if (origin) {
+      if (!origin.empty()) {
         LOG_ERROR("WebSocket request refused: Origin '" << origin <<
             "' not allowed (trusted origin is '" << trustedOrigin << "')");
       } else {
@@ -1309,7 +1312,7 @@ void WebSession::handleRequest(Handler& handler)
       handler.flushResponse();
       return;
     }
-  } else if (origin) {
+  } else if (!origin.empty()) {
     /*
      * CORS (Cross-Origin Resource Sharing)
      */
@@ -1324,21 +1327,21 @@ void WebSession::handleRequest(Handler& handler)
     if (type() == EntryPointType::WidgetSet &&
         ((wtdE && *wtdE == sessionId_) || state_ == State::JustCreated) &&
         conf.isAllowedOrigin(origin)) {
-      if (isEqual(origin, "null"))
+      if (origin == "null")
         origin = "*";
-      handler.response()->addHeader("Access-Control-Allow-Origin", origin);
+      handler.response()->addHeader("Access-Control-Allow-Origin", str(origin));
       handler.response()->addHeader("Access-Control-Allow-Credentials", "true");
       handler.response()->addHeader("Vary", "Origin");
 
-      if (isEqual(request.requestMethod(), "OPTIONS")) {
+      if (request.requestMethod() == "OPTIONS") {
         WebResponse *response = handler.response();
 
         response->setStatus(200);
         response->addHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
         response->addHeader("Access-Control-Max-Age", "1728000");
-        const char *requestHeaders = request.headerValue("Access-Control-Request-Headers");
-        if (requestHeaders)
-          response->addHeader("Access-Control-Allow-Headers", requestHeaders);
+        auto requestHeaders = request.headerValue("Access-Control-Request-Headers");
+        if (!requestHeaders.empty())
+          response->addHeader("Access-Control-Allow-Headers", str(requestHeaders));
         handler.flushResponse();
 
         return;
@@ -1389,8 +1392,8 @@ void WebSession::handleRequest(Handler& handler)
    * listening.
    */
   if (!(requestForResource
-        || isEqual(request.requestMethod(), "POST")
-        || isEqual(request.requestMethod(), "GET"))) {
+        || request.requestMethod() == "POST"
+        || request.requestMethod() == "GET")) {
     handler.response()->setStatus(400); // Bad Request
     handler.flushResponse();
     return;
@@ -1401,7 +1404,7 @@ void WebSession::handleRequest(Handler& handler)
    * matching sessionId_, unless resource request or reloadIsNewSession() is false
    */
   if (env_->ajax()
-      && isEqual(request.requestMethod(), "GET")
+      && request.requestMethod() == "GET"
       && !requestForResource
       && !requestForStyle
       && conf.reloadIsNewSession()
@@ -2632,7 +2635,7 @@ void WebSession::notify(const WEvent& event)
           if (hashE)
             changeInternalPath(*hashE, handler.response());
           else if (!handler.request()->pathInfo().empty()) {
-            changeInternalPath(handler.request()->pathInfo(),
+            changeInternalPath(str(handler.request()->pathInfo()),
                                handler.response());
           } else
             changeInternalPath("", handler.response());
@@ -2691,7 +2694,7 @@ EventType WebSession::getEventType(const WEvent& event) const
   if (event.impl_.renderOnly || !handler.request())
     return EventType::Other;
 
-  const std::string *requestE = request.getParameter("request");
+  //const std::string *requestE = request.getParameter("request");
 
   const std::string *pageIdE = handler.request()->getParameter("pageId");
   if (pageIdE && *pageIdE != std::to_string(renderer_.pageId()))

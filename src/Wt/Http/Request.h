@@ -456,10 +456,10 @@ public:
   static ByteRangeSpecifier getRanges(const std::string &header,
                                       ::int64_t filesize);
 
-  static void parseFormUrlEncoded(const std::string& s,
+  static void parseFormUrlEncoded(std::string_view s,
                                   ParameterMap& parameters);
 
-  static void parseCookies(const std::string& cookie,
+  static void parseCookies(std::string_view cookie,
                            std::map<std::string, std::string>& result);
 
 private:

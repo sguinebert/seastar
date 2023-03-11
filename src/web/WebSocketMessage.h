@@ -35,21 +35,31 @@ public:
   virtual void setContentLength(::int64_t length) override;
 
   virtual void addHeader(const std::string& name, const std::string& value) override;
-  virtual const char *envValue(const char *name) const override;
+  virtual std::string_view envValue(const char *name) const override;
 
-  virtual const std::string& serverName() const override;
-  virtual const std::string& serverPort() const override;
-  virtual const std::string& scriptName() const override;
-  virtual const char *requestMethod() const override;
-  virtual const std::string& queryString() const override;
-  virtual const std::string& pathInfo() const override;
-  virtual const std::string& remoteAddr() const override;
+  virtual std::string_view serverName() const override;
+  virtual std::string_view serverPort() const override;
+  virtual std::string_view scriptName() const override;
+  virtual std::string_view requestMethod() const override;
+  virtual std::string_view queryString() const override;
+  virtual std::string_view pathInfo() const override;
+  virtual std::string_view remoteAddr() const override;
 
   virtual const char *urlScheme() const override;
 
   virtual std::unique_ptr<Wt::WSslInfo> sslInfo(const Configuration & conf) const override;
 
-  virtual const char * headerValue(const char *name) const override;
+  virtual std::string_view headerValue(const char *name) const override;
+
+  virtual WebRequest &operator<<(std::string_view toclient) override
+  {
+      return *this;
+  };
+
+  virtual void write_body(std::string_view response) override
+  {
+      //uwsreply_->write_body(contenttype_, seastar::sstring(response));
+  }
 
 #ifndef WT_TARGET_JAVA
   virtual std::vector<Wt::Http::Message::Header> headers() const override;
@@ -57,7 +67,7 @@ public:
 
   virtual bool isWebSocketMessage() const override { return true; }
 
-  virtual const char *contentType() const override;
+  virtual std::string_view contentType() const override;
   virtual ::int64_t contentLength() const override;
 
 private:

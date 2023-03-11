@@ -105,6 +105,7 @@ private:
 
 class WT_API Configuration
 {
+  friend class WServer;
 public:
   enum SessionPolicy {
     DedicatedProcess,
@@ -163,6 +164,13 @@ public:
   void removeEntryPoint(const std::string& path);
   void setDefaultEntryPoint(const std::string& path);
   // Returns matching entry point and match length
+  EntryPointMatch matchEntryPoint(std::string_view scriptName,
+                                  std::string_view path,
+                                  bool matchAfterSlash) const;
+  static bool matchesPath(std::string_view path,
+                          std::string_view prefix,
+                          bool matchAfterSlash);
+
   EntryPointMatch matchEntryPoint(const std::string &scriptName,
                                   const std::string &path,
                                   bool matchAfterSlash) const;
@@ -202,6 +210,7 @@ public:
   int numSessionThreads() const;
 
   bool isAllowedOrigin(const std::string &origin) const;
+  bool isAllowedOrigin(std::string_view origin) const;
 
 #ifndef WT_TARGET_JAVA
   bool readConfigurationProperty(const std::string& name, std::string& value)
@@ -242,6 +251,7 @@ public:
   std::string originalIPHeader() const;
   std::vector<Network> trustedProxies() const;
   bool isTrustedProxy(const std::string &ipAddress) const;
+  bool isTrustedProxy(std::string_view ipAddress) const;
   std::string redirectMessage() const;
   bool serializedEvents() const;
   bool webSockets() const;

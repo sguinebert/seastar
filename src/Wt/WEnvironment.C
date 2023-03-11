@@ -22,6 +22,7 @@
 #include "Configuration.h"
 
 #include <boost/algorithm/string.hpp>
+#include <fmt/core.h>
 
 #ifndef WT_TARGET_JAVA
 #ifdef WT_WITH_SSL
@@ -33,6 +34,9 @@
 namespace {
   inline std::string str(const char *s) {
     return s ? std::string(s) : std::string();
+  }
+  inline std::string str(std::string_view s) {
+    return std::string(s);
   }
 }
 
@@ -150,15 +154,15 @@ void WEnvironment::init(const WebRequest& request)
      */
     host_ = request.serverName();
     if (!request.serverPort().empty())
-      host_ += ":" + request.serverPort();
+      fmt::format_to(std::back_inserter(host_), ":{}", request.serverPort());
   }
 
   clientAddress_ = request.clientAddress(conf);
 
-  const char *cookie = request.headerValue("Cookie");
-  doesCookies_ = cookie;
+  auto cookie = request.headerValue("Cookie");
+  doesCookies_ = !cookie.empty();
 
-  if (cookie)
+  if (!cookie.empty())
     parseCookies(cookie, cookies_);
 
   locale_ = request.parseLocale();
@@ -170,7 +174,7 @@ void WEnvironment::enableAjax(const WebRequest& request)
   doesAjax_ = true;
   session_->controller()->newAjaxSession();
 
-  doesCookies_ = request.headerValue("Cookie") != nullptr;
+  doesCookies_ = !request.headerValue("Cookie").empty();
 
   if (!request.getParameter("htmlHistory"))
     internalPathUsingFragments_ = true;
@@ -445,7 +449,7 @@ bool WEnvironment::isTest() const
   return false;
 }
 
-void WEnvironment::parseCookies(const std::string& cookie,
+void WEnvironment::parseCookies(std::string_view cookie,
                                 std::map<std::string, std::string>& result)
 {
   // Cookie parsing strategy:
@@ -457,16 +461,16 @@ void WEnvironment::parseCookies(const std::string& cookie,
   // - If a name-value pair does not contain an '=', the name-value pair
   //   was the name of the cookie and the value is empty
 
-  std::vector<std::string> list;
+  std::vector<std::string_view> list;
   boost::split(list, cookie, boost::is_any_of(";"));
   for (unsigned int i = 0; i < list.size(); ++i) {
     std::string::size_type e = list[i].find('=');
     if (e == std::string::npos)
       continue;
-    std::string cookieName = list[i].substr(0, e);
+    std::string cookieName(list[i].substr(0, e));
     std::string cookieValue =
       (e != std::string::npos && list[i].size() > e + 1) ?
-      list[i].substr(e + 1) : "";
+            std::string(list[i].substr(e + 1)) : "";
 
     boost::trim(cookieName);
     boost::trim(cookieValue);

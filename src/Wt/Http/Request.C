@@ -30,6 +30,10 @@ namespace {
     return s ? std::string(s) : std::string();
   }
 
+  inline std::string str(std::string_view s) {
+    return std::string(s);
+  }
+
 #ifndef WT_TARGET_JAVA
   static std::vector<std::pair<std::string, std::string> > EMPTY_URL_PARAMS;
 #endif // WT_TARGET_JAVA
@@ -144,27 +148,27 @@ std::string Request::method() const
 
 std::string Request::serverName() const
 {
-  return request_ ? request_->serverName() : std::string();
+  return request_ ? std::string(request_->serverName()) : std::string();
 }
 
 std::string Request::serverPort() const
 {
-  return request_ ? request_->serverPort() : std::string();
+  return request_ ? std::string(request_->serverPort()) : std::string();
 }
 
 std::string Request::path() const
 {
-  return request_ ? request_->scriptName() : std::string();
+  return request_ ? std::string(request_->scriptName()) : std::string();
 }
 
 std::string Request::pathInfo() const
 {
-  return request_ ? request_->pathInfo() : std::string();
+  return request_ ? std::string(request_->pathInfo()) : std::string();
 }
 
 std::string Request::queryString() const
 {
-  return request_ ? request_->queryString() : std::string();
+  return request_ ? std::string(request_->queryString()) : std::string();
 }
 
 std::string Request::urlScheme() const
@@ -377,8 +381,8 @@ Request::Request(const WebRequest& request, ResponseContinuation *continuation)
     continuation_(continuation)
 {
   if (!continuation) {
-    const char *cookie = request_->headerValue("Cookie");
-    if (cookie)
+    auto cookie = request_->headerValue("Cookie");
+    if (!cookie.empty())
       parseCookies(cookie, cookies_);
   }
 }
@@ -394,7 +398,7 @@ Request::~Request()
 { }
 
 #ifndef WT_TARGET_JAVA
-void Request::parseFormUrlEncoded(const std::string& s,
+void Request::parseFormUrlEncoded(std::string_view s,
                                   ParameterMap& parameters)
 {
   for (std::size_t pos = 0; pos < s.length();) {
@@ -409,7 +413,7 @@ void Request::parseFormUrlEncoded(const std::string& s,
     if (next == std::string::npos || s[next] == '&') {
       if (next == std::string::npos)
         next = s.length();
-      std::string key = s.substr(pos, next - pos);
+      std::string key(s.substr(pos, next - pos));
       Utils::inplaceUrlDecode(key);
       parameters[key].push_back(std::string());
       pos = next + 1;
@@ -418,10 +422,10 @@ void Request::parseFormUrlEncoded(const std::string& s,
       if (amp == std::string::npos)
         amp = s.length();
 
-      std::string key = s.substr(pos, next - pos);
+      std::string key(s.substr(pos, next - pos));
       Utils::inplaceUrlDecode(key);
 
-      std::string value = s.substr(next + 1, amp - (next + 1));
+      std::string value(s.substr(next + 1, amp - (next + 1)));
       Utils::inplaceUrlDecode(value);
 
       parameters[key].push_back(value);
@@ -432,7 +436,7 @@ void Request::parseFormUrlEncoded(const std::string& s,
 
 #endif // WT_TARGET_JAVA
 
-void Request::parseCookies(const std::string& cookie,
+void Request::parseCookies(std::string_view cookie,
                            std::map<std::string, std::string>& result)
 {
   // in WEnvironment for oink

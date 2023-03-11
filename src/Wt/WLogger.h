@@ -324,6 +324,8 @@ public:
    */
   WLogEntry& operator<< (const std::string&);
 
+  WLogEntry& operator<< (const std::string_view);
+
 #ifndef WT_DBO_LOGGER
   /*! \brief Writes a string in the current field.
    */

@@ -135,8 +135,8 @@ public:
   void start();
   void shutdown();
 
-  static std::string sessionFromCookie(const char * const cookies,
-                                       const std::string& scriptName,
+  static std::string sessionFromCookie(std::string_view cookies,
+                                       std::string_view scriptName,
                                        const int sessionIdLength);
 
   typedef std::map<int, WSocketNotifier *> SocketNotifierMap;
@@ -156,8 +156,8 @@ private:
   Configuration& conf_;
   std::string singleSessionId_;
   bool autoExpire_;
-  int plainHtmlSessions_, ajaxSessions_;
-  volatile int zombieSessions_;
+  std::atomic_uint plainHtmlSessions_, ajaxSessions_;
+  std::atomic_uint zombieSessions_;
   std::string redirectSecret_;
   bool running_;
 
@@ -218,7 +218,7 @@ private:
 
   EntryPointMatch getEntryPoint(WebRequest *request);
 
-  static std::string appSessionCookie(const std::string& url);
+  static std::string appSessionCookie(std::string_view url);
 
 #endif // WT_TARGET_JAVA
 

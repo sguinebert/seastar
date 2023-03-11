@@ -61,6 +61,7 @@ std::unique_ptr<Derived> dynamic_unique_ptr_cast(std::unique_ptr<Base> p);
 // appends the character to the string if it does not end with it
 extern std::string append(const std::string& s, char c);
 extern std::string prepend(const std::string& s, char c);
+extern std::string prepend(std::string_view s, char c);
 
 // in-place replace functions
 extern std::string& replace(std::string& s, char c, const std::string& r);

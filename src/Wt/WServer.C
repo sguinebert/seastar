@@ -22,10 +22,12 @@
 
 #include "Configuration.h"
 #include "WebController.h"
+#include "http/uWSRequest.h"
 
 #include <seastar/core/app-template.hh>
 #include <seastar/core/reactor.hh>
 #include <seastar/http/httpd.hh>
+#include <seastar/websocket/server.hh>
 #include <seastar/http/handlers.hh>
 #include <seastar/http/function_handlers.hh>
 #include <seastar/http/file_handler.hh>
@@ -45,7 +47,102 @@ namespace bpo = boost::program_options;
 using namespace seastar;
 using namespace httpd;
 
+namespace {
+struct PartialArgParseResult {
+    std::string wtConfigXml;
+    std::string appRoot;
+};
+
+static PartialArgParseResult parseArgsPartially(const std::string &applicationPath,
+                                                const std::vector<std::string> &args,
+                                                const std::string &configurationFile)
+{
+    std::string wt_config_xml;
+    Wt::WLogger stderrLogger;
+    stderrLogger.setStream(std::cerr);
+
+    ::http::server::Configuration serverConfiguration(stderrLogger, true);
+    serverConfiguration.setOptions(applicationPath, args, configurationFile);
+
+    return PartialArgParseResult {
+        serverConfiguration.configPath(),
+        serverConfiguration.appRoot()
+    };
+}
+}
+
 namespace Wt {
+class gethandler : public httpd::handler_base
+{
+public:
+    gethandler(Wt::WebController* webController, ::http::server::Configuration* serverconfig, EntryPoint* entrypoint) :
+        webController_(webController),
+        serverconfig_(serverconfig),
+        entrypoint_(entrypoint)
+    {
+
+    }
+
+    std::string_view test = R""""("<html>"
+                  "<head><title>Not Found</title></head>"
+                  "<body><h1>404 Not Found</h1></body>"
+                  "</html>")"""";
+
+    virtual future<std::unique_ptr<seastar::http::reply>> handle(const sstring& path,
+                                                                 std::unique_ptr<seastar::http::request> req,
+                                                                 std::unique_ptr<seastar::http::reply> rep)
+    {
+        //rep->write_body("text/html", seastar::sstring(test));
+
+        if(!request_)
+            request_ = new ::http::uWSRequest(rep.get(), req.get(), serverconfig_, entrypoint_);
+
+        request_->reset(rep.get(), req.get(), entrypoint_);
+
+        webController_->handleRequest(request_);
+
+//        int m = co_await seastar::yield().then(seastar::coroutine::lambda([n] () -> future<int> {
+//            co_await seastar::coroutine::maybe_yield();
+//            // `n` can be safely used here
+//            co_return n;
+//        }));
+
+        // Define a function to write the response body using the provided output stream
+//        auto body_writer = [](seastar::output_stream<char>&& out) {
+//            return seastar::do_with(std::move(out), [](auto& out) {
+//                // Write the data in chunks
+//                return seastar::repeat([&out] {
+//                    // Read a chunk of data from the input stream
+//                    return stream.read().then([&out](auto buf) {
+//                        // If there is no more data to read, stop streaming
+//                        if (buf.empty()) {
+//                            return seastar::make_ready_future<seastar::stop_iteration>(seastar::stop_iteration::yes);
+//                        }
+
+//                        // Write the chunk of data to the output stream
+//                        return out.write(std::move(buf)).then([] {
+//                            // Continue streaming
+//                            return seastar::make_ready_future<seastar::stop_iteration>(seastar::stop_iteration::no);
+//                        });
+//                    });
+//                });
+//            });
+//        };
+//        rep->add_header("Content-Type", "text/html;")
+//            //.add_header("Server", "Wt")
+//            ._content = dc;
+
+
+        co_return co_await make_ready_future<std::unique_ptr<seastar::http::reply>>(std::move(rep));
+    };
+private:
+    Wt::WebController* webController_ = 0;
+    ::http::server::Configuration* serverconfig_ = 0;
+    EntryPoint* entrypoint_ = 0;
+    inline static thread_local ::http::uWSRequest *request_ = 0;
+
+};
+
 
 //LOGGER("WServer");
 class stop_signal {
@@ -88,6 +185,42 @@ WServer::Exception::Exception(const std::string& what)
   : WException(what)
 { }
 
+char ** convert(const std::vector<std::string>& v)
+{
+    char ** t = new char* [v.size() + 1];
+
+    // Need this for execve
+    t[v.size()] = nullptr;
+
+    for (unsigned i = 0 ; i < v.size(); ++i)
+    {
+        t[i] = strdup(v[i].c_str());
+    }
+
+    return t;
+}
+struct WServer::Impl
+{
+    Impl()
+        : serverConfiguration_(0)//, server_(0)
+    {
+#ifdef ANDROID
+        preventRemoveOfSymbolsDuringLinking();
+#endif
+    }
+
+    ~Impl()
+    {
+        delete serverConfiguration_;
+    }
+
+    ::http::server::Configuration *serverConfiguration_;
+    //http::server::Server        *server_;
+    std::vector<std::string> args_;
+    int ac_;
+    char** av_;
+};
+
 void WServer::init(const std::string& wtApplicationPath,
                    const std::string& configurationFile)
 {
@@ -109,6 +242,7 @@ void WServer::init(const std::string& wtApplicationPath,
   logger_.addField("message", true);
 
   instance_ = this;
+
 }
 
 void WServer::destroy()
@@ -136,18 +270,39 @@ std::shared_ptr<WLocalizedStrings> WServer::localizedStrings() const
 }
 
 WServer::WServer(const std::string &wtApplicationPath, const std::string &wtConfigurationFile)
+  : impl_(new Impl())
 {
-
+  impl_->args_ = {
+      "-c", std::to_string(std::thread::hardware_concurrency()),
+      "--network-stack", "posix",
+      "--reactor-backend",  "epoll",
+      "--collectd", "0"
+  };
+  impl_->ac_ = impl_->args_.size();
+  impl_->av_ = convert(impl_->args_);
+  init(wtApplicationPath, wtConfigurationFile);
 }
 
 WServer::WServer(int argc, char *argv[], const std::string &wtConfigurationFile)
+  : impl_(new Impl())
 {
+  impl_->ac_ = argc;
+  impl_->av_ = argv;
+  impl_->args_ = std::vector<std::string>(argv, argv + argc);
+  std::string applicationPath = argv[0];
+  std::vector<std::string> args(argv + 1, argv + argc);
 
+  setServerConfiguration(applicationPath, args, wtConfigurationFile);
 }
 
 WServer::WServer(const std::string &applicationPath, const std::vector<std::string> &args, const std::string &wtConfigurationFile)
+  : impl_(new Impl())
 {
-
+  impl_->ac_ = args.size();
+  impl_->av_ = convert(args);
+  impl_->args_ = args;
+  init(applicationPath, "");
+  setServerConfiguration(applicationPath, args, wtConfigurationFile);
 }
 
 void WServer::setIOService(WIOService& ioService)
@@ -173,6 +328,29 @@ WIOService& WServer::ioService()
   }
 
   return *ioService_;
+}
+
+void WServer::setServerConfiguration(const std::string &applicationPath, const std::vector<std::string> &args, const std::string &serverConfigurationFile)
+{
+  auto result = parseArgsPartially(applicationPath, args, serverConfigurationFile);
+
+  if (!result.appRoot.empty())
+    setAppRoot(result.appRoot);
+
+  if (configurationFile().empty())
+    setConfiguration(result.wtConfigXml);
+
+  webController_ = new Wt::WebController(*this);
+
+  impl_->serverConfiguration_ = new ::http::server::Configuration(logger());
+
+  impl_->serverConfiguration_->setSslPasswordCallback(sslPasswordCallback_);
+
+  impl_->serverConfiguration_->setOptions(applicationPath, args, serverConfigurationFile);
+
+  dedicatedProcessEnabled_ = impl_->serverConfiguration_->parentPort() != -1;
+
+  configuration().setDefaultEntryPoint(impl_->serverConfiguration_->deployPath());
 }
 
 void WServer::setAppRoot(const std::string& path)
@@ -352,7 +530,6 @@ void WServer::removeEntryPoint(const std::string& path){
 
 void WServer::run(int argc, char** argv)
 {
-
   httpd::http_server_control prometheus_server;
   prometheus::config pctx;
   app_template app;
@@ -361,8 +538,6 @@ void WServer::run(int argc, char** argv)
   app.add_options()("prometheus_port", bpo::value<uint16_t>()->default_value(9180), "Prometheus port. Set to zero in order to disable.");
   app.add_options()("prometheus_address", bpo::value<sstring>()->default_value("0.0.0.0"), "Prometheus address");
   app.add_options()("prometheus_prefix", bpo::value<sstring>()->default_value("seastar_httpd"), "Prometheus metrics prefix");
-
-
 
   app.run_deprecated(argc, argv, [&] { //BUG with io_uring - hanging
 
@@ -396,7 +571,31 @@ void WServer::run(int argc, char** argv)
           auto server = new http_server_control();
           auto rb = std::make_shared<api_registry_builder>("apps/httpd/");
           server->start().get();
-          server->set_routes([] (auto& routes){
+          server->set_routes([&] (auto& routes){
+
+
+              auto& entrypoints = configuration().entryPoints_;
+
+              for (auto &ep : entrypoints)
+              {
+//                  function_handler* hget = new function_handler([](const_req req) {
+//                      return "hello";
+//                  });
+                  function_handler* hpost = new function_handler([](const_req req) {
+                      return "hello";
+                  });
+
+                  gethandler* hget = new gethandler(webController_, impl_->serverConfiguration_, &ep);
+
+                  routes.add(operation_type::GET, seastar::url(ep.path()), hget);
+                  routes.add(operation_type::POST, seastar::url(ep.path()), hpost);
+
+                  if(ep.type() != Wt::EntryPointType::StaticResource)
+                  {
+
+                  }
+              }
+
               //auto h1 = new handl;
               function_handler* h1 = new function_handler([](const_req req) {
                   return "hello";
@@ -412,14 +611,38 @@ void WServer::run(int argc, char** argv)
           server->listen(port).get();
 
           std::cout << "Seastar HTTP server listening on port " << port << " ...\n";
-          engine().at_exit([&prometheus_server, server, pport] {
+
+          auto ws = new experimental::websocket::server;
+//          ws->register_handler("echo", [] (input_stream<char>& in, output_stream<char>& out) {
+//              return repeat([&in, &out]() {
+//                  return in.read().then([&out](temporary_buffer<char> f) {
+//                      std::cerr << "f.size(): " << f.size() << "\n";
+//                      if (f.empty()) {
+//                          return make_ready_future<stop_iteration>(stop_iteration::yes);
+//                      } else {
+//                          return out.write(std::move(f)).then([&out]() {
+//                              return out.flush().then([] {
+//                                  return make_ready_future<stop_iteration>(stop_iteration::no);
+//                              });
+//                          });
+//                      }
+//                  });
+//              });
+//          });
+//          ws->listen(socket_address(ipv4_addr("127.0.0.1", 10001)));
+//          std::cout << "Listening on 127.0.0.1:8123 for 1 hour (interruptible, hit Ctrl-C to stop)..." << std::endl;
+
+
+          engine().at_exit([&prometheus_server, server, ws, pport] {
               return [pport, &prometheus_server] {
                   if (pport) {
                       std::cout << "Stoppping Prometheus server" << std::endl;
                       return prometheus_server.stop();
                   }
                   return make_ready_future<>();
-              }().finally([server] {
+              }().then([ws] {
+                             return ws->stop();
+                         }).finally([server] {
                              std::cout << "Stoppping HTTP server" << std::endl;
                              return server->stop();
                          });
@@ -429,12 +652,6 @@ void WServer::run(int argc, char** argv)
           //waitForShutdown();
       });
   });
-
-//  seastar::app_template app;
-//  app.run(argc, argv, [] {
-//      std::cout << seastar::smp::count << "\n";
-//      return seastar::make_ready_future<>();
-//  });
 }
 
 void WServer::restart(int argc, char **argv, char **envp)

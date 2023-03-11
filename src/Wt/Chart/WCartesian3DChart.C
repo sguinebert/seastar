@@ -2200,11 +2200,14 @@ void WCartesian3DChart::deleteGLTextures() {
   deleteTexture(cubeTextureYZ_);cubeTextureYZ_.clear();
 
   if (!titleTexture_.isNull())
-    deleteTexture(titleTexture_);titleTexture_.clear();
+    deleteTexture(titleTexture_);
+  titleTexture_.clear();
   if (!legendTexture_.isNull())
-    deleteTexture(legendTexture_);legendTexture_.clear();
+    deleteTexture(legendTexture_);
+  legendTexture_.clear();
   if (!colorMapTexture_.isNull())
-    deleteTexture(colorMapTexture_);colorMapTexture_.clear();
+    deleteTexture(colorMapTexture_);
+  colorMapTexture_.clear();
 
   for (std::size_t i = 0; i < objectsToDelete.size(); ++i) {
     cpp17::any o = objectsToDelete[i];

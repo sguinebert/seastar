@@ -19,6 +19,8 @@ namespace Wt {
 class CgiParser;
 class WebRequest;
 
+
+
 /*
  * Parses CGI in all its forms (get/post/file uploads).
  *
@@ -39,7 +41,7 @@ public:
   void parse(WebRequest& request, ReadOption option);
 
 private:
-  void readMultipartData(WebRequest& request, const std::string type,
+  void readMultipartData(WebRequest& request, std::string_view type,
                          ::int64_t len);
   bool parseBody(WebRequest& request, const std::string boundary);
   bool parseHead(WebRequest& request);
@@ -58,9 +60,9 @@ private:
 
   enum {BUFSIZE = 8192};
   enum {MAXBOUND = 100};
-
+  static constexpr int buffsize = (int)BUFSIZE + (int)(MAXBOUND);
   int buflen_;
-  char buf_[BUFSIZE + MAXBOUND];
+  char buf_[buffsize];
 };
 
 }

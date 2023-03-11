@@ -264,16 +264,16 @@ void WebController::removeSession(const std::string& sessionId)
   }
 }
 
-std::string WebController::appSessionCookie(const std::string& url)
+std::string WebController::appSessionCookie(std::string_view url)
 {
   return Utils::urlEncode(url);
 }
 
-std::string WebController::sessionFromCookie(const char * const cookies,
-                                             const std::string& scriptName,
+std::string WebController::sessionFromCookie(std::string_view cookies,
+                                             std::string_view scriptName,
                                              const int sessionIdLength)
 {
-  if (!cookies)
+  if (cookies.empty())
     return std::string();
 
   std::string cookieName = appSessionCookie(scriptName);
@@ -284,8 +284,8 @@ std::string WebController::sessionFromCookie(const char * const cookies,
                                              (c >= 'a' && c <= 'z') ||
                                              (c >= '0' && c <= '9'); };
 
-  const char *start = cookies;
-  const char * const end = cookies + strlen(cookies);
+  const char *start = cookies.data();
+  const char * const end = cookies.data() + cookies.size();
   start = std::find_if_not(start, end, is_whitespace); // Skip leading whitespace
   while (start < end) {
     const char *const nextEquals = std::find(start, end, '=');
@@ -464,7 +464,7 @@ bool WebController::requestDataReceived(WebRequest *request,
   if (!running_)
     return false;
 
-  if (uploadProgressUrls_.find(request->queryString())
+  if (uploadProgressUrls_.find(std::string(request->queryString()))
       != uploadProgressUrls_.end()) {
 #ifdef WT_THREADED
     lock.unlock();
@@ -489,7 +489,7 @@ bool WebController::requestDataReceived(WebRequest *request,
       str(request->getParameter("request")),
       str(request->getParameter("resource")),
       request->postDataExceeded(),
-      request->pathInfo(),
+        std::string(request->pathInfo()),
       current,
       total
     };
@@ -600,8 +600,8 @@ std::string WebController::redirectSecret(const Wt::WebRequest &request) const
   if (configuration().behindReverseProxy() ||
       configuration().isTrustedProxy(request.remoteAddr())) {
     const auto secretHeader = request.headerValue(WT_REDIRECT_SECRET_HEADER);
-    if (secretHeader && secretHeader[0] != '\0') {
-      return secretHeader;
+    if (!secretHeader.empty() && secretHeader[0] != '\0') {
+      return std::string(secretHeader);
     }
   }
 #endif // WT_TARGET_JAVA
@@ -617,16 +617,17 @@ void WebController::handleRequest(WebRequest *request)
     return;
   }
 
-  if (!request->entryPoint_) {
-    EntryPointMatch match = getEntryPoint(request);
-    request->entryPoint_ = match.entryPoint;
-    if (!request->entryPoint_) {
-      request->setStatus(404);
-      request->flush();
-      return;
-    }
-    request->urlParams_ = std::move(match.urlParams);
-  }
+  //not needed rooter handled by seastar
+//  if (!request->entryPoint_) {
+//    EntryPointMatch match = getEntryPoint(request);
+//    request->entryPoint_ = match.entryPoint;
+//    if (!request->entryPoint_) {
+//      request->setStatus(404);
+//      request->flush();
+//      return;
+//    }
+//    request->urlParams_ = std::move(match.urlParams);
+//  }
 
   CgiParser cgi(conf_.maxRequestSize(), conf_.maxFormDataSize());
 
@@ -675,7 +676,7 @@ void WebController::handleRequest(WebRequest *request)
   std::string multiSessionCookie;
   if (conf_.sessionTracking() == Configuration::Combined)
     multiSessionCookie = sessionFromCookie(request->headerValue("Cookie"),
-                                           "ms" + request->scriptName(),
+                                           "ms" + std::string(request->scriptName()),
                                            conf_.sessionIdLength());
 
   if (sessionId.empty() && wtdE)
@@ -705,7 +706,7 @@ void WebController::handleRequest(WebRequest *request)
                    "persistent session requested Id: " << sessionId << ", "
                    << "persistent Id: " << singleSessionId_);
 
-        if (sessions_.empty() || strcmp(request->requestMethod(), "GET") == 0)
+        if (sessions_.empty() || request->requestMethod() == "GET")
           sessionId = singleSessionId_;
       } else
         sessionId = singleSessionId_;
@@ -721,7 +722,7 @@ void WebController::handleRequest(WebRequest *request)
       try {
         if (sessionTracking == Configuration::Combined &&
             i != sessions_.end() && !i->second->dead()) {
-          if (!request->headerValue("Cookie")) {
+          if (request->headerValue("Cookie").empty()) {
             LOG_ERROR_S(&server_, "Valid session id: " << sessionId << ", but "
                         "no cookie received (expecting multi session cookie)");
             request->setStatus(403);
@@ -840,10 +841,7 @@ std::unique_ptr<WApplication> WebController
 
 EntryPointMatch WebController::getEntryPoint(WebRequest *request)
 {
-  const std::string& scriptName = request->scriptName();
-  const std::string& pathInfo = request->pathInfo();
-
-  return conf_.matchEntryPoint(scriptName, pathInfo, false);
+  return conf_.matchEntryPoint(request->scriptName(), request->pathInfo(), false);
 }
 
 std::string
@@ -873,9 +871,9 @@ WebController::generateNewSessionId(const std::shared_ptr<WebSession>& session)
 
 void WebController::newAjaxSession()
 {
-#ifdef WT_THREADED
-  std::unique_lock<std::recursive_mutex> lock(mutex_);
-#endif // WT_THREADED
+//#ifdef WT_THREADED
+//  std::unique_lock<std::recursive_mutex> lock(mutex_);
+//#endif // WT_THREADED
 
   --plainHtmlSessions_;
   ++ajaxSessions_;
@@ -884,9 +882,9 @@ void WebController::newAjaxSession()
 bool WebController::limitPlainHtmlSessions()
 {
   if (conf_.maxPlainSessionsRatio() > 0) {
-#ifdef WT_THREADED
-    std::unique_lock<std::recursive_mutex> lock(mutex_);
-#endif // WT_THREADED
+//#ifdef WT_THREADED
+//    std::unique_lock<std::recursive_mutex> lock(mutex_);
+//#endif // WT_THREADED
 
     if (plainHtmlSessions_ + ajaxSessions_ > 20)
       return plainHtmlSessions_ > conf_.maxPlainSessionsRatio()

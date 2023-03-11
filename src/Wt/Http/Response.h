@@ -111,6 +111,8 @@ public:
 
   WT_BOSTREAM& bout() { return out(); }
 
+  void write_body(std::string_view response);
+
 private:
   WResource *resource_;
   WebResponse *response_;

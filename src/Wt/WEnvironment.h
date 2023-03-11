@@ -728,7 +728,7 @@ private:
   void enableAjax(const WebRequest& request);
 
   bool agentSupportsAjax() const;
-  static void parseCookies(const std::string& cookie,
+  static void parseCookies(std::string_view cookie,
                            std::map<std::string, std::string>& result);
 
   friend class WebController;

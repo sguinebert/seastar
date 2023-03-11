@@ -63,6 +63,14 @@ std::string append(const std::string& s, char c)
     return s;
 }
 
+std::string prepend(std::string_view s, char c)
+{
+  if (s.empty() || s[0] != c)
+    return c + std::string(s);
+  else
+    return std::string(s);
+}
+
 std::string prepend(const std::string& s, char c)
 {
   if (s.empty() || s[0] != c)
@@ -70,6 +78,7 @@ std::string prepend(const std::string& s, char c)
   else
     return s;
 }
+
 
 std::string& replace(std::string& s, char c, const std::string& r)
 {

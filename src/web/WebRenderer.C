@@ -631,7 +631,7 @@ void WebRenderer::renderWsRequestsDone(WStringStream &out)
 void WebRenderer::updateMultiSessionCookie(const WebRequest &request)
 {
   Configuration &conf = session_.controller()->configuration();
-  Http::Cookie cookie("ms" + request.scriptName(), session_.multiSessionId());
+  Http::Cookie cookie("ms" + std::string(request.scriptName()), session_.multiSessionId());
 #ifndef WT_TARGET_JAVA
   cookie.setMaxAge(std::chrono::seconds(conf.multiSessionCookieTimeout()));
 #else

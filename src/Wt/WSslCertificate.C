@@ -108,7 +108,7 @@ std::string WSslCertificate::DnAttribute::longName() const
 }
 
 std::vector<WSslCertificate::DnAttribute>
-WSslCertificate::dnFromString(const std::string &dn)
+WSslCertificate::dnFromString(std::string_view dn)
 {
   std::vector<std::string> rdns;
   boost::split(rdns, dn, boost::is_any_of(","));

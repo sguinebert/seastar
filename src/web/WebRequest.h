@@ -102,6 +102,8 @@ public:
 
   WT_BOSTREAM& bout() { return out(); }
 
+  virtual void write_body(std::string_view response) = 0;
+
   /*
    * (Not used)
    */
@@ -130,20 +132,22 @@ public:
   /*
    * Adds a header for a normal response.
    */
-  virtual void addHeader(const std::string& name, const std::string& value) = 0;
+  virtual void addHeader(const std::string &name, const std::string &value) = 0;
 
   /*
    * Returns request information, which are not http headers.
    */
-  virtual const char *envValue(const char *name) const = 0;
+  virtual std::string_view envValue(const char *name) const = 0;
 
-  virtual const std::string& serverName() const = 0;
-  virtual const std::string& serverPort() const = 0;
-  virtual const std::string& scriptName() const = 0;
-  virtual const char *requestMethod() const = 0;
-  virtual const std::string& queryString() const = 0;
-  virtual const std::string& pathInfo() const = 0;
-  virtual const std::string& remoteAddr() const = 0;
+  virtual std::string_view serverName() const = 0;
+  virtual std::string_view serverPort() const = 0;
+  virtual std::string_view scriptName() const = 0;
+  virtual std::string_view requestMethod() const = 0;
+  virtual std::string_view queryString() const = 0;
+  virtual std::string_view pathInfo() const = 0;
+  virtual std::string_view remoteAddr() const = 0;
+
+  virtual WebRequest &operator<<(std::string_view toclient) = 0;
 
   virtual const char *urlScheme() const = 0;
 
@@ -155,19 +159,19 @@ public:
   /*
    * Accesses to cgi environment variables and headers -- rfc2616 name
    */
-  virtual const char *headerValue(const char *name) const = 0;
+  virtual std::string_view headerValue(const char *name) const = 0;
 
   /*
    * Accesses to specific header fields (calls headerValue()).
    */
-  const char *userAgent() const;
-  const char *referer() const;
+  std::string_view userAgent() const;
+  std::string_view referer() const;
 
 #ifndef WT_TARGET_JAVA
   virtual std::vector<Wt::Http::Message::Header> headers() const = 0;
 #endif
 
-  virtual const char *contentType() const;
+  virtual std::string_view contentType() const;
   virtual ::int64_t contentLength() const;
 
 #ifdef WT_TARGET_JAVA
@@ -220,7 +224,7 @@ protected:
 #endif // WT_CNOR
 
 private:
-  std::string parsePreferredAcceptValue(const char *value) const;
+  std::string parsePreferredAcceptValue(const std::string_view value) const;
 
   ::int64_t postDataExceeded_;
   Http::ParameterMap parameters_;

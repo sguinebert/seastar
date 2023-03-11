@@ -92,9 +92,9 @@ WT_BOSTREAM& Response::out()
 
         // We cannot query wApp here, because wApp doesn't exist for
         // static resources.
-        const char *ua = response_->userAgent();
-        bool isIE = ua && strstr(ua, "MSIE") != nullptr;
-        bool isChrome = ua && strstr(ua, "Chrome") != nullptr;
+        auto ua = response_->userAgent();
+        bool isIE = ua.find_first_of("MSIE") != std::string_view::npos;
+        bool isChrome = ua.find_first_of("Chrome") != std::string_view::npos;
 
         if (isIE || isChrome) {
           // filename="foo-%c3%a4-%e2%82%ac.html"
@@ -124,6 +124,12 @@ WT_BOSTREAM& Response::out()
     return *out_;
   else
     return response_->out();
+}
+
+void Response::write_body(std::string_view response)
+{
+  if(response_)
+    response_->write_body(response);
 }
 
 Response::Response(WResource *resource, WebResponse *response,

@@ -39,6 +39,7 @@
 #include "Wt/WException.h"
 #include "Wt/WLogger.h"
 #include "Wt/Http/Request.h"
+#include <boost/regex.hpp>
 
 using std::memmove;
 using std::strcpy;
@@ -59,12 +60,24 @@ namespace {
   const std::regex content_type_e("^\\s*Content-Type:",
                                   std::regex::icase);
 
-  bool fishValue(const std::string& text,
+  using svmatch = std::match_results<std::string_view::const_iterator>;
+  using svsub_match = std::sub_match<std::string_view::const_iterator>;
+
+  inline bool regex_match(std::string_view sv,
+                          svmatch& m,
+                          const std::regex& e,
+                          std::regex_constants::match_flag_type flags =
+                          std::regex_constants::match_default)
+  {
+      return std::regex_match(sv.begin(), sv.end(), m, e, flags);
+  }
+
+  bool fishValue(std::string_view text,
                  const std::regex& e, std::string& result)
   {
-    std::smatch what;
+    svmatch what;
 
-    if (std::regex_search(text, what, e)) {
+    if (regex_match(text, what, e)) {
       result = std::string(what[1]) + std::string(what[2]);
       return true;
     } else
@@ -94,12 +107,12 @@ void CgiParser::parse(WebRequest& request, ReadOption readOption)
   request_ = &request;
 
   ::int64_t len = request.contentLength();
-  const char *type = request.contentType();
-  const char *meth = request.requestMethod();
+  auto type = request.contentType();
+  auto meth = request.requestMethod();
 
   request.postDataExceeded_ = (len > maxRequestSize_ ? len : 0);
 
-  std::string queryString = request.queryString();
+  auto queryString = request.queryString();
 
   LOG_DEBUG("queryString (len=" << len << "): " << queryString);
 
@@ -110,10 +123,9 @@ void CgiParser::parse(WebRequest& request, ReadOption readOption)
   // XDomainRequest cannot set a contentType header, we therefore pass it
   // as a request parameter
   if (readOption != ReadHeadersOnly &&
-      strcmp(meth, "POST") == 0 &&
-      ((type && strstr(type, "application/x-www-form-urlencoded") == type) ||
-       (queryString.find("&contentType=x-www-form-urlencoded") !=
-        std::string::npos))) {
+      meth == "POST" &&
+      ((!type.empty() && type.find_first_of("application/x-www-form-urlencoded") !=  std::string_view::npos) ||
+       (queryString.find("&contentType=x-www-form-urlencoded") != std::string_view::npos))) {
     /*
      * TODO: parse this stream-based to avoid the malloc here. For now
      * we protect the maximum that can be POST'ed as form data.
@@ -148,8 +160,8 @@ void CgiParser::parse(WebRequest& request, ReadOption readOption)
   }
 
   if (readOption != ReadHeadersOnly &&
-      type && strstr(type, "multipart/form-data") == type) {
-    if (strcmp(meth, "POST") != 0) {
+      !type.empty() && type.find_first_of("multipart/form-data") == 0) {
+    if (meth != "POST") {
       throw WException("Invalid method for multipart/form-data: "
                        + std::string(meth));
     }
@@ -169,7 +181,7 @@ void CgiParser::parse(WebRequest& request, ReadOption readOption)
 }
 
 void CgiParser::readMultipartData(WebRequest& request,
-                                  const std::string type, ::int64_t len)
+                                  std::string_view type, ::int64_t len)
 {
   std::string boundary;
 
@@ -234,7 +246,7 @@ void CgiParser::readUntilBoundary(WebRequest& request,
 
     unsigned amt = static_cast<unsigned>
       (std::min(left_,
-                static_cast< ::int64_t >(BUFSIZE + MAXBOUND - buflen_)));
+                static_cast< ::int64_t >(buffsize - buflen_)));
 
     request.in().read(buf_ + buflen_, amt);
     if (request.in().gcount() != (int)amt)

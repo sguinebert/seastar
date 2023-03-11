@@ -825,6 +825,8 @@ extern WT_API WString operator+ (const WString& lhs, const char32_t *rhs);
  */
 extern WT_API WString operator+ (const WString& lhs, const std::string& rhs);
 
+extern WT_API WString operator+ (const WString& lhs, std::string_view rhs);
+
 /*! \brief Conatenate a WString with a C string
  *
  * \relates WString
@@ -873,6 +875,8 @@ extern WT_API WString operator+ (const char32_t *lhs, const WString& rhs);
  */
 extern WT_API WString operator+ (const std::string& lhs, const WString& rhs);
 
+extern WT_API WString operator+ (std::string_view lhs, const WString& rhs);
+
 /*! \brief Conatenate a C string with a WString
  *
  * \relates WString
@@ -908,6 +912,8 @@ extern WT_API bool operator== (const char32_t *lhs, const WString& rhs);
  * \relates WString
  */
 extern WT_API bool operator== (const std::string& lhs, const WString& rhs);
+
+extern WT_API bool operator== (std::string_view lhs, const WString& rhs);
 
 /*! \brief Compare a C++ wide string with a WString
  *

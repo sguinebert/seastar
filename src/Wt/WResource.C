@@ -190,36 +190,36 @@ void WResource::handle(WebRequest *webRequest, WebResponse *webResponse,
    * If we come from a continuation, then the continuation increased the
    * use count and we are thus protected against deletion.
    */
-  WebSession::Handler *handler = WebSession::Handler::instance();
-  UseLock useLock;
+//  WebSession::Handler *handler = WebSession::Handler::instance();
+//  UseLock useLock;
 
-#ifdef WT_THREADED
-  std::unique_ptr<Wt::WApplication::UpdateLock> updateLock;
-  if (takesUpdateLock() && continuation && app_) {
-    updateLock.reset(new Wt::WApplication::UpdateLock(app_));
-    if (!*updateLock) {
-      return;
-    }
-  }
+//#ifdef WT_THREADED
+//  std::unique_ptr<Wt::WApplication::UpdateLock> updateLock;
+//  if (takesUpdateLock() && continuation && app_) {
+//    updateLock.reset(new Wt::WApplication::UpdateLock(app_));
+//    if (!*updateLock) {
+//      return;
+//    }
+//  }
 
-  if (handler && !continuation) {
-    std::unique_lock<std::recursive_mutex> lock(*mutex_);
+//  if (handler && !continuation) {
+//    std::unique_lock<std::recursive_mutex> lock(*mutex_);
 
-    if (!useLock.use(this))
-      return;
+//    if (!useLock.use(this))
+//      return;
 
-    if (!takesUpdateLock() &&
-        handler->haveLock() &&
-        handler->lockOwner() == std::this_thread::get_id()) {
-      handler->unlock();
-    }
-  }
-#endif // WT_THREADED
+//    if (!takesUpdateLock() &&
+//        handler->haveLock() &&
+//        handler->lockOwner() == std::this_thread::get_id()) {
+//      handler->unlock();
+//    }
+//  }
+//#endif // WT_THREADED
 
-  if (!handler) {
-    WLocale locale = webRequest->parseLocale();
-    WLocale::setCurrentLocale(locale);
-  }
+//  if (!handler) {
+//    WLocale locale = webRequest->parseLocale();
+//    WLocale::setCurrentLocale(locale);
+//  }
 
   Http::Request request(*webRequest, continuation.get());
   Http::Response response(this, webResponse, continuation);
@@ -240,24 +240,24 @@ void WResource::handle(WebRequest *webRequest, WebResponse *webResponse,
     }
   }
 
-#ifdef WT_THREADED
-  updateLock.reset();
-#endif // WT_THREADED
+//#ifdef WT_THREADED
+//  updateLock.reset();
+//#endif // WT_THREADED
 
-  if (!response.continuation_ || !response.continuation_->resource_) {
-    if (response.continuation_)
-      removeContinuation(response.continuation_);
+//  if (!response.continuation_ || !response.continuation_->resource_) {
+//    if (response.continuation_)
+//      removeContinuation(response.continuation_);
 
-    response.out(); // trigger committing the headers if still necessary
+//    response.out(); // trigger committing the headers if still necessary
 
-    webResponse->flush(WebResponse::ResponseState::ResponseDone);
-  } else {
-    webResponse->flush
-      (WebResponse::ResponseState::ResponseFlush,
-       std::bind(&Http::ResponseContinuation::readyToContinue,
-                 response.continuation_,
-                 std::placeholders::_1));
-  }
+//    webResponse->flush(WebResponse::ResponseState::ResponseDone);
+//  } else {
+//    webResponse->flush
+//      (WebResponse::ResponseState::ResponseFlush,
+//       std::bind(&Http::ResponseContinuation::readyToContinue,
+//                 response.continuation_,
+//                 std::placeholders::_1));
+//  }
 }
 
 void WResource::handleAbort(const Http::Request& request)

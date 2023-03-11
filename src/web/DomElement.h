@@ -140,6 +140,16 @@ public:
    */
   void setDomElementTagName(const std::string& name);
 
+  static std::string urlEncodeS(std::string_view url);
+
+  /*! \brief Low-level URL encoding function.
+   *
+   * This variant allows the exclusion of certain characters from URL
+   * encoding.
+   */
+  static std::string urlEncodeS(std::string_view url,
+                                const std::string& allowed);
+
   /*! \brief Low-level URL encoding function.
    */
   static std::string urlEncodeS(const std::string& url);

@@ -492,6 +492,19 @@ bool Configuration::isTrustedProxy(const std::string &ipAddress) const {
   });
 }
 
+bool Configuration::isTrustedProxy(std::string_view ipAddress) const
+{
+  READ_LOCK;
+  AsioWrapper::error_code ec;
+  const auto address = AsioWrapper::asio::ip::make_address(ipAddress, ec);
+  if (ec) {
+    return false;
+  }
+  return std::any_of(begin(trustedProxies_), end(trustedProxies_), [&address](const Network &network) {
+      return network.contains(address);
+  });
+}
+
 std::string Configuration::redirectMessage() const
 {
   READ_LOCK;
@@ -593,6 +606,21 @@ int Configuration::numSessionThreads() const
 }
 
 bool Configuration::isAllowedOrigin(const std::string &origin) const
+{
+  READ_LOCK;
+  if (allowedOrigins_.size() == 1 &&
+      allowedOrigins_[0] == "*")
+    return true;
+  else {
+    for (std::size_t i = 0; i < allowedOrigins_.size(); ++i) {
+      if (origin == allowedOrigins_[i])
+        return true;
+    }
+    return false;
+  }
+}
+
+bool Configuration::isAllowedOrigin(std::string_view origin) const
 {
   READ_LOCK;
   if (allowedOrigins_.size() == 1 &&
@@ -772,6 +800,174 @@ void Configuration::setDefaultEntryPoint(const std::string& path)
 {
   defaultEntryPoint_ = path;
 }
+
+
+EntryPointMatch Configuration::matchEntryPoint(std::string_view scriptName,
+                                               std::string_view path,
+                                               bool matchAfterSlash) const
+{
+  if (!scriptName.empty())
+  {
+    LOG_DEBUG("matchEntryPoint: matching entry point, scriptName: '" << scriptName << "', path: '" << path << '\'');
+    EntryPointMatch m = matchEntryPoint(EMPTY_STR, std::string(scriptName) + std::string(path), matchAfterSlash);
+    if (m.entryPoint)
+      return m;
+    else
+      return matchEntryPoint(EMPTY_STR, path, matchAfterSlash);
+  }
+  LOG_DEBUG("matchEntryPoint: matching entry point, path: '" << path << '\'');
+
+  READ_LOCK;
+  // Only one default entry point.
+  if (entryPoints_.size() == 1 && entryPoints_[0].path().empty())
+  {
+    LOG_DEBUG("matchEntryPoint: only one entry point: matching path '" << path << "' with default entry point");
+    return EntryPointMatch(&entryPoints_[0], 0);
+  }
+
+  assert(path.empty() || path[0] == '/');
+
+  const PathSegment *pathSegment = &rootPathSegment_;
+
+  // Flag marking whether any of the matched segments is dynamic
+  bool dynamic = false;
+
+  typedef boost::split_iterator<std::string_view::const_iterator> spliterator;
+    typedef boost::split_iterator<std::string::const_iterator> strpliterator;
+
+  spliterator it;
+  if (!path.empty())
+  {
+    it = spliterator(path.begin() + 1, path.end(),
+                     boost::first_finder(FORWARD_SLASH, boost::is_equal()));
+    // Move down the routing tree, segment per segment
+    for (; it != spliterator(); ++it)
+    {
+      // Find exact path match for segment
+      const auto &children = pathSegment->children;
+      const PathSegment *childSegment = nullptr;
+      auto c = std::find_if(children.begin(), children.end(), [&it](const std::unique_ptr<PathSegment> &c)
+                            { return c->segment == *it; });
+      if (c != children.end())
+        childSegment = c->get();
+
+      // No exact match, see if there is a dynamic segment
+      if (!childSegment &&
+          !it->empty() &&
+          pathSegment->dynamicChild)
+      {
+        childSegment = pathSegment->dynamicChild.get();
+        dynamic = true;
+      }
+
+      // No match, deepest match reached
+      if (!childSegment)
+        break;
+
+      // Move to the next segment
+      pathSegment = childSegment;
+    }
+  }
+  else
+  {
+    matchAfterSlash = true;
+  }
+
+  // Move up from the found segment, until we find one that corresponds to an entrypoint
+  const EntryPoint *match = nullptr;
+  for (; pathSegment != nullptr; pathSegment = pathSegment->parent)
+  {
+    // If matchAfterSlash is true,
+    // then the path /head/tail
+    // may match the entry point /head/
+    if (matchAfterSlash && (path.empty() || it != spliterator()))
+    {
+      const auto &children = pathSegment->children;
+      if (!children.empty() && children.front()->segment.empty())
+      {
+        match = children.front()->entryPoint;
+        break;
+      }
+    }
+    // If the current segment has an entrypoint, we're done
+    if (pathSegment->entryPoint)
+    {
+      match = pathSegment->entryPoint;
+      break;
+    }
+  }
+
+  if (match && dynamic)
+  {
+    // Process path parameters
+    EntryPointMatch result;
+    result.entryPoint = match;
+    // Iterate concurrently over the path (it1),
+    // and the matched endpoint's path (it2)
+    spliterator it1 = spliterator(path.begin() + 1, path.end(),
+                                  boost::first_finder(FORWARD_SLASH, boost::is_equal()));
+    for (strpliterator it2 = strpliterator(match->path().begin() + 1, match->path().end(),
+                                       boost::first_finder(FORWARD_SLASH, boost::is_equal()));
+         it1 != spliterator() && it2 != strpliterator(); ++it1, ++it2)
+    {
+      // Check dynamic segment (e.g. "${var}")
+      if (boost::starts_with(*it2, "${") &&
+          boost::ends_with(*it2, "}"))
+      {
+        auto range = boost::iterator_range<std::string::const_iterator>(it2->begin() + 2, it2->end() - 1);
+        result.urlParams.push_back(std::make_pair(boost::copy_range<std::string>(range),
+                                                  boost::copy_range<std::string>(*it1)));
+      }
+    }
+    if (it1 == spliterator())
+      result.extra = path.size(); // no extra path
+    else
+      result.extra = std::distance(path.begin(), it1->begin()) - 1; // there's more
+
+    LOG_DEBUG("matchEntryPoint: path '" << path << "' matches dynamic entry point: '" << match->path() << '\'');
+    return result;
+  }
+  else if (match)
+  {
+    LOG_DEBUG("matchEntryPoint: path '" << path << "' matches entry point: '" << match->path() << '\'');
+    return EntryPointMatch(match, path.empty() ? 0 : match->path().size()); // simple match
+  }
+  else
+  {
+    LOG_DEBUG("matchEntryPoint: no entry point match found for path: '" << path << '\'');
+    return EntryPointMatch(); // no match
+  }
+}
+
+bool Configuration::matchesPath(std::string_view path,
+                                std::string_view prefix,
+                                bool matchAfterSlash)
+{
+  if (boost::starts_with(path, prefix))
+  {
+    std::size_t prefixLength = prefix.length();
+
+    if (path.length() > prefixLength)
+    {
+      char next = path[prefixLength];
+
+      if (next == '/')
+        return true;
+      else if (matchAfterSlash)
+      {
+        char last = prefix[prefixLength - 1];
+
+        if (last == '/')
+          return true;
+      }
+    }
+    else
+      return true;
+  }
+
+  return false;
+}
+
 
 EntryPointMatch Configuration::matchEntryPoint(const std::string &scriptName,
                                                  const std::string &path,

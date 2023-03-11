@@ -101,6 +101,32 @@ WLogEntry& WLogEntry::operator<< (const std::string& s)
   return *this;
 }
 
+WLogEntry& WLogEntry::operator<< (std::string_view s)
+{
+  if (impl_) {
+    if (impl_->quote()) {
+      startField();
+
+      std::string ss(s);
+      Utils::replace(ss, '"', "\"\"");
+
+      impl_->line_ << ss;
+    } else {
+      if (!s.empty()) {
+        startField();
+        impl_->line_ << std::string(s);
+      }
+    }
+
+    if ((impl_->customLogger_ ||
+         impl_->field_ == (int)impl_->logger_->fields().size() - 1)
+        && impl_->scope_.empty())
+      impl_->scope_ = s;
+  }
+
+  return *this;
+}
+
 WLogEntry& WLogEntry::operator<< (char v)
 {
   startField();

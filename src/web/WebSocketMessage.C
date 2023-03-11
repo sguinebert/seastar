@@ -87,7 +87,7 @@ void WebSocketMessage::addHeader(const std::string& name,
   error("addHeader(): not supported");
 }
 
-const char *WebSocketMessage::envValue(const char *name) const
+std::string_view WebSocketMessage::envValue(const char *name) const
 {
   return webSocket()->envValue(name);
 }
@@ -100,42 +100,42 @@ const char *WebSocketMessage::envValue(const char *name) const
   return length;
 }
 
-const char *WebSocketMessage::contentType() const
+std::string_view WebSocketMessage::contentType() const
 {
   return "application/x-www-form-urlencoded";
 }
 
-const std::string& WebSocketMessage::serverName() const
+std::string_view WebSocketMessage::serverName() const
 {
   return webSocket()->serverName();
 }
 
-const std::string& WebSocketMessage::serverPort() const
+std::string_view WebSocketMessage::serverPort() const
 {
   return webSocket()->serverPort();
 }
 
-const std::string& WebSocketMessage::scriptName() const
+std::string_view WebSocketMessage::scriptName() const
 {
   return webSocket()->scriptName();
 }
 
-const char *WebSocketMessage::requestMethod() const
+std::string_view WebSocketMessage::requestMethod() const
 {
   return "POST";
 }
 
-const std::string& WebSocketMessage::queryString() const
+std::string_view WebSocketMessage::queryString() const
 {
   return queryString_;
 }
 
-const std::string& WebSocketMessage::pathInfo() const
+std::string_view WebSocketMessage::pathInfo() const
 {
   return webSocket()->pathInfo();
 }
 
-const std::string& WebSocketMessage::remoteAddr() const
+std::string_view WebSocketMessage::remoteAddr() const
 {
   return webSocket()->remoteAddr();
 }
@@ -155,7 +155,7 @@ std::unique_ptr<Wt::WSslInfo> WebSocketMessage::sslInfo(const Configuration & co
   return webSocket()->sslInfo(conf);
 }
 
-const char *WebSocketMessage::headerValue(const char *name) const
+std::string_view WebSocketMessage::headerValue(const char *name) const
 {
   return webSocket()->headerValue(name);
 }

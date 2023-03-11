@@ -175,6 +175,11 @@ std::string urlEncode(const std::string& text)
   return DomElement::urlEncodeS(text);
 }
 
+std::string urlEncode(std::string_view text)
+{
+  return DomElement::urlEncodeS(text);
+}
+
 std::string urlDecode(const std::string &text)
 {
   WStringStream result;
