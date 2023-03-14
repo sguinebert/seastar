@@ -38,20 +38,20 @@ public:
    * creates Entry for each parameter entry. The request is annotated
    * with the parse results.
    */
-  void parse(WebRequest& request, ReadOption option);
+  void parse(WebRequest* request, ReadOption option);
 
 private:
-  void readMultipartData(WebRequest& request, std::string_view type,
+  void readMultipartData(WebRequest* request, std::string_view type,
                          ::int64_t len);
-  bool parseBody(WebRequest& request, const std::string boundary);
-  bool parseHead(WebRequest& request);
+  bool parseBody(WebRequest* request, const std::string boundary);
+  bool parseHead(WebRequest* request);
   ::int64_t maxFormData_, maxRequestSize_, left_;
   std::ostream *spoolStream_;
   WebRequest *request_;
 
   std::string currentKey_;
 
-  void readUntilBoundary(WebRequest& request, const std::string boundary,
+  void readUntilBoundary(WebRequest* request, const std::string boundary,
                          int tossAtBoundary,
                          std::string *resultString,
                          std::ostream *resultFile);

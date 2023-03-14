@@ -17,6 +17,9 @@
 #include <cstdint>
 #include <functional>
 
+#include <seastar/http/reply.hh>
+#include <seastar/http/request.hh>
+
 namespace Wt {
 
 class Configuration;
@@ -31,6 +34,9 @@ class WT_API WebRequest
 {
 public:
   WebRequest();
+
+    seastar::http::request* request_ = 0;
+    seastar::http::reply* reply_ = 0;
 
   void log();
 
@@ -64,6 +70,7 @@ public:
 #ifdef WT_TARGET_JAVA
   virtual void flushBuffer();
 #endif
+
   /*
    * For a web socket request (isWebSocketRequest()), read a message
    * and call the given callback function when done.

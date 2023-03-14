@@ -114,6 +114,14 @@ struct request {
         return res->second;
     }
 
+    std::string_view get_query_param_view(const sstring& name) const {
+        auto res = query_parameters.find(name);
+        if (res == query_parameters.end()) {
+            return std::string_view();
+        }
+        return res->second;
+    }
+
     /**
      * Get the request protocol name. Can be either "http" or "https".
      */

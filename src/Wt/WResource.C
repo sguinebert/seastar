@@ -169,7 +169,7 @@ void WResource::removeContinuation(Http::ResponseContinuationPtr continuation)
 Http::ResponseContinuationPtr
 WResource::addContinuation(Http::ResponseContinuation *c)
 {
-  Http::ResponseContinuationPtr result(c);
+  Http::ResponseContinuationPtr result;
 
 #ifdef WT_THREADED
   std::unique_lock<std::recursive_mutex> lock(*mutex_);
@@ -190,7 +190,7 @@ void WResource::handle(WebRequest *webRequest, WebResponse *webResponse,
    * If we come from a continuation, then the continuation increased the
    * use count and we are thus protected against deletion.
    */
-//  WebSession::Handler *handler = WebSession::Handler::instance();
+  WebSession::Handler *handler = WebSession::Handler::instance();
 //  UseLock useLock;
 
 //#ifdef WT_THREADED
@@ -216,10 +216,17 @@ void WResource::handle(WebRequest *webRequest, WebResponse *webResponse,
 //  }
 //#endif // WT_THREADED
 
-//  if (!handler) {
-//    WLocale locale = webRequest->parseLocale();
-//    WLocale::setCurrentLocale(locale);
-//  }
+  if (!handler) {
+    WLocale locale = webRequest->parseLocale();
+    WLocale::setCurrentLocale(locale);
+  }
+//  std::string_view test = R""""("<html>"
+//                  "<head><title>Not Found</title></head>"
+//                  "<body><h1>404 Not Found</h1></body>"
+//                  "</html>")"""";
+
+//  webResponse->reply_->write_body("text/html", seastar::sstring(test));
+//  return;
 
   Http::Request request(*webRequest, continuation.get());
   Http::Response response(this, webResponse, continuation);
@@ -228,7 +235,9 @@ void WResource::handle(WebRequest *webRequest, WebResponse *webResponse,
     response.setStatus(200);
 
   try {
+#ifdef CLASSIC_HANDLE
     handleRequest(request, response);
+#endif
   } catch (std::exception& e) {
     LOG_ERROR("Uncaught exception from handleRequest (aborting request): " << e.what());
     // If the status was not already sent, set it to 500 Internal Server Error
@@ -257,7 +266,17 @@ void WResource::handle(WebRequest *webRequest, WebResponse *webResponse,
 //       std::bind(&Http::ResponseContinuation::readyToContinue,
 //                 response.continuation_,
 //                 std::placeholders::_1));
-//  }
+  //  }
+}
+
+void WResource::handle(WebRequest *webRequest)
+{
+  std::string_view test = R""""("<html>"
+                  "<head><title>Not Found</title></head>"
+                  "<body><h1>404 Not Found</h1></body>"
+                  "</html>")"""";
+
+  webRequest->reply_->write_body("text/html", seastar::sstring(test));
 }
 
 void WResource::handleAbort(const Http::Request& request)
@@ -342,14 +361,18 @@ void WResource::write(WT_BOSTREAM& out,
   Http::Request  request(parameters, files);
   Http::Response response(this, out);
 
+#ifdef CLASSIC_HANDLE
   handleRequest(request, response);
+#endif
 
   // While the resource indicates more data to be sent, get it too.
   while (response.continuation_ && response.continuation_->resource_) {
     response.continuation_->resource_ = nullptr;
     request.continuation_ = response.continuation_.get();
 
+#ifdef CLASSIC_HANDLE
     handleRequest(request, response);
+#endif
   }
 }
 

@@ -49,7 +49,7 @@ OidcUserInfoEndpoint::~OidcUserInfoEndpoint()
 {
   beingDeleted();
 }
-
+#ifdef CLASSIC_HANDLE
 void OidcUserInfoEndpoint::handleRequest(const Http::Request& request, Http::Response& response)
 {
   std::string authHeader = request.headerValue("Authorization");
@@ -84,6 +84,48 @@ void OidcUserInfoEndpoint::handleRequest(const Http::Request& request, Http::Res
   }
 #endif
 }
+#else
+
+seastar::future<std::unique_ptr<seastar::http::reply> > OidcUserInfoEndpoint::handle(const seastar::sstring &path,
+                                                                                    std::unique_ptr<seastar::http::request> request,
+                                                                                    std::unique_ptr<seastar::http::reply> response)
+{
+//  std::string authHeader = request.headerValue("Authorization");
+//  if (!boost::starts_with(authHeader, AUTH_TYPE)) {
+//      response.setStatus(400);
+//      response.addHeader("WWW-Authenticate", "error=\"invalid_request\"");
+//      LOG_INFO("error=\"invalid_request\": Authorization header missing");
+//      return;
+//  }
+//  std::string tokenValue = authHeader.substr(AUTH_TYPE.length());
+//  IssuedToken accessToken = db_->idpTokenFindWithValue("access_token", tokenValue);
+//  if (!accessToken.checkValid() || WDateTime::currentDateTime() > accessToken.expirationTime()) {
+//      response.setStatus(401);
+//      response.addHeader("WWW-Authenticate", "error=\"invalid_token\"");
+//      LOG_INFO("error=\"invalid_token\" " << authHeader);
+//      return;
+//  }
+//  response.setMimeType("application/json");
+//  response.setStatus(200);
+//  User user = accessToken.user();
+//  std::string scope = accessToken.scope();
+//  std::set<std::string> scopeSet;
+//  boost::split(scopeSet, scope, boost::is_any_of(" "));
+//#ifdef WT_TARGET_JAVA
+//  try {
+//#endif
+//      response.out() << Json::serialize(generateUserInfo(user, scopeSet)) << std::endl;
+//      LOG_INFO("Response sent for " << user.id() << "(" << db_->email(user) << ")");
+//#ifdef WT_TARGET_JAVA
+//  } catch (std::io_exception ioe) {
+//      LOG_ERROR(ioe.message());
+//  }
+//#endif
+
+  return seastar::make_ready_future<std::unique_ptr<seastar::http::reply>>(std::move(response));
+}
+#endif
+
 
 Json::Object OidcUserInfoEndpoint::generateUserInfo(const User& user, const std::set<std::string>& scope)
 {

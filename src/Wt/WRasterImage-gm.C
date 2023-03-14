@@ -311,7 +311,7 @@ void WRasterImage::Impl::internalDone()
     currentClipPathRendered_ = -1;
   }
 }
-
+#ifdef CLASSIC_HANDLE
 void WRasterImage::handleRequest(const Http::Request &request,
                                  Http::Response &response)
 {
@@ -333,6 +333,14 @@ void WRasterImage::handleRequest(const Http::Request &request,
     response.setStatus(500);
   }
 }
+#else
+seastar::future<std::unique_ptr<seastar::http::reply>> WRasterImage::handle(const seastar::sstring& path,
+                                                                            std::unique_ptr<seastar::http::request> request,
+                                                                            std::unique_ptr<seastar::http::reply> response)
+{
+
+}
+#endif
 
 void WRasterImage::Impl::applyTransform(const WTransform& t)
 {

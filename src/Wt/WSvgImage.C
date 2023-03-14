@@ -900,6 +900,8 @@ std::string WSvgImage::rendered()
   return s.str();
 }
 
+
+#ifdef CLASSIC_HANDLE
 void WSvgImage::handleRequest(const Http::Request& request,
                               Http::Response& response)
 {
@@ -913,6 +915,15 @@ void WSvgImage::handleRequest(const Http::Request& request,
 
   streamResourceData(o);
 }
+#else
+seastar::future<std::unique_ptr<seastar::http::reply> > WSvgImage::handle(const seastar::sstring &path,
+                                                                         std::unique_ptr<seastar::http::request> request,
+                                                                         std::unique_ptr<seastar::http::reply> response)
+{
+
+}
+#endif
+
 
 void WSvgImage::streamResourceData(std::ostream& stream)
 {

@@ -1972,7 +1972,7 @@ void WebSession::handleWebSocketMessage(std::weak_ptr<WebSession> session,
           CgiParser cgi(lock->controller_->configuration().maxRequestSize(),
                         lock->controller_->configuration().maxFormDataSize());
           try {
-            cgi.parse(*message, CgiParser::ReadDefault);
+            cgi.parse(message, CgiParser::ReadDefault);
           } catch (std::exception& e) {
             LOG_ERROR("could not parse ws message: " << e.what());
             closing = true;

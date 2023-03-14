@@ -9,6 +9,7 @@
 
 #include <Wt/WGlobal.h>
 #include <Wt/WAny.h>
+#include <seastar/core/shared_ptr.hh>
 
 #include <mutex>
 
@@ -46,7 +47,7 @@ namespace Wt {
  */
 class WT_API ResponseContinuation
 #ifndef WT_TARGET_JAVA
-  : public std::enable_shared_from_this<ResponseContinuation>
+  : public seastar::enable_shared_from_this<ResponseContinuation>
 #endif
 {
 public:
@@ -114,7 +115,7 @@ private:
   friend class Response;
 };
 
-typedef std::shared_ptr<ResponseContinuation> ResponseContinuationPtr;
+typedef seastar::shared_ptr<ResponseContinuation> ResponseContinuationPtr;
 
   }
 }

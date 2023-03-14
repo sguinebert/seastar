@@ -89,8 +89,15 @@ public:
   virtual WLength width() const override { return width_; }
   virtual WLength height() const override { return height_; }
 
+#ifdef CLASSIC_HANDLE
   virtual void handleRequest(const Http::Request& request,
                              Http::Response& response) override;
+#else
+  seastar::future<std::unique_ptr<seastar::http::reply>> handle(const seastar::sstring &path,
+                                                                std::unique_ptr<seastar::http::request> request,
+                                                                std::unique_ptr<seastar::http::reply> response) override;
+#endif
+
 
 protected:
   virtual WPainter *painter() const override { return painter_; }

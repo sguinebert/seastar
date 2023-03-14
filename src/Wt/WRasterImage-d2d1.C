@@ -1113,7 +1113,7 @@ private:
   std::ostream &os_;
   LONG refcount_;
 };
-
+#ifdef CLASSIC_HANDLE
 void WRasterImage::handleRequest(const Http::Request& request,
                                  Http::Response& response)
 {
@@ -1167,5 +1167,13 @@ void WRasterImage::handleRequest(const Http::Request& request,
   SafeRelease(encoder);
   SafeRelease(istream);
 }
+#else
+seastar::future<std::unique_ptr<seastar::http::reply>> WRasterImage::handle(const seastar::sstring& path,
+                                                                      std::unique_ptr<seastar::http::request> req,
+                                                                      std::unique_ptr<seastar::http::reply> rep)
+{
+
+}
+#endif
 
 }

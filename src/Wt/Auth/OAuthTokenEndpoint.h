@@ -72,9 +72,13 @@ public:
                      std::string issuer);
 
   ~OAuthTokenEndpoint();
-
-  virtual void handleRequest(const Http::Request& request, Http::Response& response) override;
-
+#ifdef CLASSIC_HANDLE
+  void handleRequest(const Http::Request &request, Http::Response &response) override;
+#else
+  virtual seastar::future<std::unique_ptr<seastar::http::reply>> handle(const seastar::sstring& path,
+                                                                        std::unique_ptr<seastar::http::request> request,
+                                                                        std::unique_ptr<seastar::http::reply> response) override;
+#endif
   /*! \brief Sets the amount of seconds after which generated access
    * tokens expire.
    *

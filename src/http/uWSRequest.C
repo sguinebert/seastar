@@ -135,6 +135,7 @@ namespace http
     {
         entryPoint_ = entryPoint;
         scriptname_ = request_->_url;
+        reply_ = reply;
     }
 
     void uWSRequest::reset(seastar::http::reply *reply,
@@ -146,6 +147,7 @@ namespace http
       uwsreply_ = reply;
       request_ = request;
       entryPoint_ = entryPoint;
+      reply_ = reply;
 
       in_mem_.str("");
       in_mem_.clear();

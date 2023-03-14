@@ -53,23 +53,62 @@ public:
   {
     beingDeleted();
   }
+#ifdef CLASSIC_HANDLE
+    virtual void handleRequest(const Wt::Http::Request& request,
+                               Wt::Http::Response& response) override
+    {
+  #ifndef WT_TARGET_JAVA
+      std::ostream& o = response.out();
+  #else
+      std::ostream o(response.out());
+  #endif // WT_TARGET_JAVA
 
-  virtual void handleRequest(const Wt::Http::Request& request,
-                             Wt::Http::Response& response) override
-  {
-#ifndef WT_TARGET_JAVA
-    std::ostream& o = response.out();
+      const std::string *result = request.getParameter("result");
+      const std::string *payerId = request.getParameter("PayerID");
+
+      if (result && *result == "ok" && payerId)
+        checkout_->setPaymentAccepted(true, *payerId);
+      else
+        checkout_->setPaymentAccepted(false, std::string());
+
+      /*
+       * Parse request parameters here and set them in the checkout_
+       *   we can already make the call for the details while the window
+       *   is being closed ?
+       */
+
+      WApplication *app = WApplication::instance();
+      std::string appJs = app->javaScriptClass();
+
+      o <<
+        "<!DOCTYPE html>"
+        "<html lang=\"en\" dir=\"ltr\">\n"
+        "<head><title></title>\n"
+        "<script type=\"text/javascript\">\n"
+        "function load() { "
+        """if (window.opener." << appJs << ") {"
+        ""  "var " << appJs << "= window.opener." << appJs << ";"
+        <<  checkout_->redirected().createCall({"-1"}) << ";"
+        ""  "window.closedAfterRedirect=true;"
+        ""  "window.close();"
+        "}\n"
+        "}\n"
+        "</script></head>"
+        "<body onload=\"load();\"></body></html>";
+    }
 #else
-    std::ostream o(response.out());
-#endif // WT_TARGET_JAVA
+  seastar::future<std::unique_ptr<seastar::http::reply> > handle(const seastar::sstring &path,
+                                                                std::unique_ptr<seastar::http::request> request,
+                                                                std::unique_ptr<seastar::http::reply> response) override
+  {
 
-    const std::string *result = request.getParameter("result");
-    const std::string *payerId = request.getParameter("PayerID");
+    auto result = request->get_query_param("result");
+    auto payerId = request->get_query_param("PayerID");
 
-    if (result && *result == "ok" && payerId)
-      checkout_->setPaymentAccepted(true, *payerId);
+    if (!result.empty() && result == "ok" && !payerId.empty())
+        checkout_->setPaymentAccepted(true, payerId);
     else
-      checkout_->setPaymentAccepted(false, std::string());
+        checkout_->setPaymentAccepted(false, std::string());
 
     /*
      * Parse request parameters here and set them in the checkout_
@@ -80,22 +119,23 @@ public:
     WApplication *app = WApplication::instance();
     std::string appJs = app->javaScriptClass();
 
-    o <<
-      "<!DOCTYPE html>"
-      "<html lang=\"en\" dir=\"ltr\">\n"
-      "<head><title></title>\n"
-      "<script type=\"text/javascript\">\n"
-      "function load() { "
-      """if (window.opener." << appJs << ") {"
-      ""  "var " << appJs << "= window.opener." << appJs << ";"
-      <<  checkout_->redirected().createCall({"-1"}) << ";"
-      ""  "window.closedAfterRedirect=true;"
-      ""  "window.close();"
-      "}\n"
-      "}\n"
-      "</script></head>"
-      "<body onload=\"load();\"></body></html>";
+    response->_content = fmt::format( "<!DOCTYPE html>"
+                                                           "<html lang=\"en\" dir=\"ltr\">\n"
+                                                           "<head><title></title>\n"
+                                                           "<script type=\"text/javascript\">\n"
+                                                           "function load() {{ "
+                                                           "if (window.opener.{}) {{"
+                                                           "var {}= window.opener.{};{};"
+                                                           "window.closedAfterRedirect=true;"
+                                                           "window.close();"
+                                                           "}}\n"
+                                                           "}}\n"
+                                                           "</script></head>"
+                                                           "<body onload=\"load();\"></body></html>", appJs, appJs, appJs, checkout_->redirected().createCall({"-1"}));
+
+    return seastar::make_ready_future<std::unique_ptr<seastar::http::reply>>(std::move(response));
   }
+#endif
 
 private:
   PayPalExpressCheckout *checkout_;

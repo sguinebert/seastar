@@ -99,20 +99,20 @@ CgiParser::CgiParser(::int64_t maxRequestSize, ::int64_t maxFormData)
     maxRequestSize_(maxRequestSize)
 { }
 
-void CgiParser::parse(WebRequest& request, ReadOption readOption)
+void CgiParser::parse(WebRequest* request, ReadOption readOption)
 {
   /*
    * TODO: optimize this ...
    */
-  request_ = &request;
+  request_ = request;
 
-  ::int64_t len = request.contentLength();
-  auto type = request.contentType();
-  auto meth = request.requestMethod();
+  ::int64_t len = request->contentLength();
+  auto type = request->contentType();
+  auto meth = request->requestMethod();
 
-  request.postDataExceeded_ = (len > maxRequestSize_ ? len : 0);
+  request->postDataExceeded_ = (len > maxRequestSize_ ? len : 0);
 
-  auto queryString = request.queryString();
+  auto queryString = request->queryString();
 
   LOG_DEBUG("queryString (len=" << len << "): " << queryString);
 
@@ -136,9 +136,9 @@ void CgiParser::parse(WebRequest& request, ReadOption readOption)
 
     auto buf = std::unique_ptr<char[]>(new char[len + 1]);
 
-    request.in().read(buf.get(), len);
+    request->in().read(buf.get(), len);
 
-    if (request.in().gcount() != (int)len) {
+    if (request->in().gcount() != (int)len) {
       throw WException("Unexpected short read.");
     }
 
@@ -166,13 +166,13 @@ void CgiParser::parse(WebRequest& request, ReadOption readOption)
                        + std::string(meth));
     }
 
-    if (!request.postDataExceeded_)
+    if (!request->postDataExceeded_)
       readMultipartData(request, type, len);
     else if (readOption == ReadBodyAnyway) {
       for (;len > 0;) {
         ::int64_t toRead = std::min(::int64_t(BUFSIZE), len);
-        request.in().read(buf_, toRead);
-        if (request.in().gcount() != (::int64_t)toRead)
+        request->in().read(buf_, toRead);
+        if (request->in().gcount() != (::int64_t)toRead)
           throw WException("CgiParser: short read");
         len -= toRead;
       }
@@ -180,7 +180,7 @@ void CgiParser::parse(WebRequest& request, ReadOption readOption)
   }
 }
 
-void CgiParser::readMultipartData(WebRequest& request,
+void CgiParser::readMultipartData(WebRequest* request,
                                   std::string_view type, ::int64_t len)
 {
   std::string boundary;
@@ -213,7 +213,7 @@ void CgiParser::readMultipartData(WebRequest& request,
  * tossAtBoundary controls how many characters extra (<0)
  * or few (>0) are saved at the start of the boundary in the result.
  */
-void CgiParser::readUntilBoundary(WebRequest& request,
+void CgiParser::readUntilBoundary(WebRequest* request,
                                   const std::string boundary,
                                   int tossAtBoundary,
                                   std::string *resultString,
@@ -248,8 +248,8 @@ void CgiParser::readUntilBoundary(WebRequest& request,
       (std::min(left_,
                 static_cast< ::int64_t >(buffsize - buflen_)));
 
-    request.in().read(buf_ + buflen_, amt);
-    if (request.in().gcount() != (int)amt)
+    request->in().read(buf_ + buflen_, amt);
+    if (request->in().gcount() != (int)amt)
       throw WException("CgiParser: short read");
 
     left_ -= amt;
@@ -286,7 +286,7 @@ int CgiParser::index(const std::string search)
     return i;
 }
 
-bool CgiParser::parseHead(WebRequest& request)
+bool CgiParser::parseHead(WebRequest* request)
 {
   std::string head;
   readUntilBoundary(request, "\r\n\r\n", -2, &head, 0);
@@ -319,7 +319,7 @@ bool CgiParser::parseHead(WebRequest& request)
   currentKey_ = name;
 
   if (!fn.empty()) {
-    if (!request.postDataExceeded_) {
+    if (!request->postDataExceeded_) {
       /*
        * It is not easy to create a std::ostream pointing to a
        * temporary file name.
@@ -347,7 +347,7 @@ bool CgiParser::parseHead(WebRequest& request)
   return true;
 }
 
-bool CgiParser::parseBody(WebRequest& request, const std::string boundary)
+bool CgiParser::parseBody(WebRequest* request, const std::string boundary)
 {
   std::string value;
 

@@ -129,7 +129,8 @@ WT_BOSTREAM& Response::out()
 void Response::write_body(std::string_view response)
 {
   if(response_)
-    response_->write_body(response);
+    //response_->write_body(response);
+    response_->reply_->write_body("text/html", seastar::sstring(response));
 }
 
 Response::Response(WResource *resource, WebResponse *response,

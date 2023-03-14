@@ -473,7 +473,7 @@ bool WebController::requestDataReceived(WebRequest *request,
     CgiParser cgi(conf_.maxRequestSize(), conf_.maxFormDataSize());
 
     try {
-      cgi.parse(*request, CgiParser::ReadHeadersOnly);
+      cgi.parse(request, CgiParser::ReadHeadersOnly);
     } catch (std::exception& e) {
       LOG_ERROR_S(&server_, "could not parse request: " << e.what());
       return false;
@@ -611,6 +611,10 @@ std::string WebController::redirectSecret(const Wt::WebRequest &request) const
 
 void WebController::handleRequest(WebRequest *request)
 {
+//  request->entryPoint_->resource()->handle(request);
+//  request->entryPoint_->resource()->handle(request, (WebResponse *)request);
+//  return;
+
   if (!running_) {
     request->setStatus(500);
     request->flush();
@@ -632,7 +636,7 @@ void WebController::handleRequest(WebRequest *request)
   CgiParser cgi(conf_.maxRequestSize(), conf_.maxFormDataSize());
 
   try {
-    cgi.parse(*request, conf_.needReadBodyBeforeResponse()
+    cgi.parse(request, conf_.needReadBodyBeforeResponse()
               ? CgiParser::ReadBodyAnyway
               : CgiParser::ReadDefault);
   } catch (std::exception& e) {

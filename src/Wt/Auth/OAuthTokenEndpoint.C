@@ -67,6 +67,8 @@ OAuthTokenEndpoint::~OAuthTokenEndpoint()
 #endif // WT_TARGET_JAVA
 }
 
+#ifdef CLASSIC_HANDLE
+
 void OAuthTokenEndpoint::handleRequest(const Http::Request &request, Http::Response &response)
 {
 #ifdef WT_TARGET_JAVA
@@ -212,6 +214,166 @@ void OAuthTokenEndpoint::handleRequest(const Http::Request &request, Http::Respo
   }
 #endif
 }
+#else
+seastar::future<std::unique_ptr<seastar::http::reply> > OAuthTokenEndpoint::handle(const seastar::sstring &path,
+                                                                                  std::unique_ptr<seastar::http::request> request,
+                                                                                  std::unique_ptr<seastar::http::reply> response)
+{
+#ifdef WT_TARGET_JAVA
+  try {
+#endif // WT_TARGET_JAVA
+    response->set_mime_type("application/json");
+    response->add_header("Cache-Control", "no-store");
+    response->add_header("Pragma", "no-cache");
+
+    auto grantType = request->get_query_param("grant_type");
+    auto redirectUri = request->get_query_param("redirect_uri");
+    auto code = request->get_query_param("code");
+    std::string clientId;
+    std::string clientSecret;
+    ClientSecretMethod authMethod = HttpAuthorizationBasic;
+
+    // Preferred method: get authorization information from
+    // Http Basic authentication
+    std::string headerSecret;
+    auto authHeader = request->get_header("Authorization");
+    if (authHeader.length() > AUTH_TYPE.length() + 1) {
+#ifndef WT_TARGET_JAVA
+        headerSecret = Utils::base64Decode(authHeader.substr(AUTH_TYPE.length() + 1));
+#else
+      headerSecret = Utils::base64DecodeS(authHeader.substr(AUTH_TYPE.length() + 1));
+#endif // WT_TARGET_JAVA
+        std::vector<std::string> tokens;
+        boost::split(tokens, headerSecret, boost::is_any_of(":"));
+        if (tokens.size() == 2) {
+            clientId = Utils::urlDecode(tokens[0]);
+            clientSecret = Utils::urlDecode(tokens[1]);
+            authMethod = HttpAuthorizationBasic;
+        }
+    }
+
+    // Alternative method: pass authorization information as parameters
+    // (only allowed for post methods)
+    if (clientId.empty() && clientSecret.empty()) {
+        auto clientIdParam = request->get_query_param("client_id");
+        auto clientSecretParam = request->get_query_param("client_secret");
+        if (!clientIdParam.empty() && !clientSecretParam.empty()) {
+            clientId = clientIdParam;
+            clientSecret = clientSecretParam;
+            authMethod = RequestBodyParameter;
+        }
+    }
+
+
+
+//    if (code.empty() || clientId.empty() || clientSecret.empty() || grantType.empty() || redirectUri.empty()) {
+//        response.setStatus(400);
+//        response.out() << "{\"error\": \"invalid_request\"}" << std::endl;
+//        LOG_INFO("{\"error\": \"invalid_request\"}:"
+//                 << " code:" << (code ? *code : "NULL")
+//                 << " clientId: " << clientId
+//                 << " clientSecret: " << (clientSecret.empty() ? "MISSING" : "NOT MISSING")
+//                 << " grantType: " << (grantType ? *grantType : "NULL")
+//                 << " redirectUri: " << (redirectUri ? *redirectUri : "NULL"));
+//        return;
+          return seastar::make_ready_future<std::unique_ptr<seastar::http::reply>>(std::move(response));
+//    }
+//    OAuthClient client = db_->idpClientFindWithId(clientId);
+//    if (!client.checkValid() || !client.verifySecret(clientSecret)
+//        || client.authMethod() != authMethod) {
+//        response.setStatus(401);
+//        if (!authHeader.empty()) {
+//            if (client.authMethod() == HttpAuthorizationBasic)
+//                response.addHeader("WWW-Authenticate", AUTH_TYPE);
+//            else
+//                response.addHeader("WWW-Authenticate",
+//                                   methodToString(client.authMethod()));
+//        }
+//        response.out() << "{\n\"error\": \"invalid_client\"\n}" << std::endl;
+//        LOG_INFO("{\"error\": \"invalid_client\"}: "
+//                 << " id: " << clientId
+//                 << " client: " << (client.checkValid() ? "valid" : "not valid")
+//                 << " secret: " << (client.verifySecret(clientSecret) ? "correct" : "incorrect")
+//                 << " method: " << (client.authMethod() != authMethod ? "no match" : "match")
+//                 );
+//        return;
+
+          return seastar::make_ready_future<std::unique_ptr<seastar::http::reply>>(std::move(response));
+//    }
+//    if (*grantType != GRANT_TYPE) {
+//        response.setStatus(400);
+//        response.out() << "{\n\"error\": \"unsupported_grant_type\"\n}" << std::endl;
+//        LOG_INFO("{\"error\": \"unsupported_grant_type\"}: "
+//                 << " id: " << clientId
+//                 << " grantType: " << grantType
+//                 );
+//        return;
+
+          return seastar::make_ready_future<std::unique_ptr<seastar::http::reply>>(std::move(response));
+//    }
+//    IssuedToken authCode = db_->idpTokenFindWithValue(GRANT_TYPE, *code);
+//    if (!authCode.checkValid() || authCode.redirectUri() != *redirectUri
+//        || WDateTime::currentDateTime() > authCode.expirationTime()) {
+//        response.setStatus(400);
+//        response.out() << "{\n\"error\": \"invalid_grant\"\n}" << std::endl;
+//        LOG_INFO("{\"error\": \"invalid_grant\"}:"
+//                 << " id: " << clientId
+//                 << " code: " << *code
+//                 << " authCode: " << (authCode.checkValid() ? "valid" : "not valid")
+//                 << " redirectUri: " << *redirectUri << (authCode.redirectUri() != *redirectUri ? " - invalid" : " - valid")
+//                 << " timestamp: " << authCode.expirationTime().toString() << (WDateTime::currentDateTime() > authCode.expirationTime() ? ", expired" : ", not expired")
+//                 );
+//        return;
+
+          return seastar::make_ready_future<std::unique_ptr<seastar::http::reply>>(std::move(response));
+//    }
+//    std::string accessTokenValue = WRandom::generateId();
+//    WDateTime expirationTime = WDateTime::currentDateTime().addSecs(accessExpSecs_);
+//    const User &user = authCode.user();
+//    const OAuthClient &authClient = authCode.authClient();
+//    const std::string scope = authCode.scope();
+//    db_->idpTokenAdd(accessTokenValue, expirationTime, "access_token", scope,
+//                     authCode.redirectUri(), user, authClient);
+//    db_->idpTokenRemove(authCode);
+//    response.setStatus(200);
+//    Json::Object root;
+//    root["access_token"] = Json::Value(accessTokenValue);
+//    root["token_type"] = Json::Value("Bearer");
+//    root["expires_in"] = Json::Value(accessExpSecs_);
+//    if (authCode.scope().find("openid") != std::string::npos) {
+//        std::string header;
+//        std::string signature;
+//        std::string payload = Utils::base64Encode(idTokenPayload(authClient.clientId(), scope, user), false);
+//#ifndef WT_TARGET_JAVA
+//#ifdef WT_WITH_SSL
+//        if (privateKey_) {
+//            header    = Utils::base64Encode("{\n\"typ\": \"JWT\",\n\"alg\": \"RS256\"\n}", false);
+//            signature = Utils::base64Encode(rs256(header + "." + payload), false);
+//        } else {
+//#endif // WT_WITH_SSL
+//#endif // WT_TARGET_JAVA
+//            header    = Utils::base64Encode("{\n\"typ\": \"JWT\",\n\"alg\": \"none\"\n}", false);
+//            signature = Utils::base64Encode("", false);
+//#ifndef WT_TARGET_JAVA
+//#ifdef WT_WITH_SSL
+//        }
+//#endif // WT_WITH_SSL
+//#endif // WT_TARGET_JAVA
+//        root["id_token"] = Json::Value(header + "." + payload + "." + signature);
+//    }
+//    response.out() << Json::serialize(root);
+
+//    LOG_INFO("success: " << clientId << ", " << user.id() << ", " << db_->email(user));
+
+//#ifdef WT_TARGET_JAVA
+//  } catch (std::io_exception ioe) {
+//    LOG_ERROR(ioe.message());
+//  }
+//#endif
+
+    return seastar::make_ready_future<std::unique_ptr<seastar::http::reply>>(std::move(response));
+}
+#endif
 
 const std::string OAuthTokenEndpoint::idTokenPayload(const std::string &clientId,
                                                      const std::string &scope,

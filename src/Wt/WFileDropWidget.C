@@ -41,6 +41,60 @@ public:
   void setCurrentFile(File *file) { currentFile_ = file; }
 
 protected:
+
+  seastar::future<std::unique_ptr<seastar::http::reply> > handle(const seastar::sstring &path,
+                                                                std::unique_ptr<seastar::http::request> request,
+                                                                std::unique_ptr<seastar::http::reply> response) override
+  {
+      // In JWt we still have the update lock
+#ifndef WT_TARGET_JAVA
+    /**
+     * Taking the update-lock (rather than posting to the event loop):
+     *   - guarantee that the updates to WFileDropWidget happen immediately,
+     *     before any application-code is called by the finished upload.
+     *   - only Wt-code is executed within this lock
+     */
+    WApplication::UpdateLock lock(WApplication::instance());
+#endif // WT_TARGET_JAVA
+
+    auto fileId = request->get_query_param("file-id");
+    if (fileId == 0 || (fileId).empty()) {
+        response->set_status(seastar::http::reply::status_type::not_found);
+        return seastar::make_ready_future<std::unique_ptr<seastar::http::reply>>(std::move(response));
+    }
+    int id = boost::lexical_cast<int>(fileId);
+    bool validId = parent_->incomingIdCheck(id);
+    if (!validId) {
+        response->set_status(seastar::http::reply::status_type::not_found);
+       return seastar::make_ready_future<std::unique_ptr<seastar::http::reply>>(std::move(response));
+    }
+
+    std::vector<Http::UploadedFile> files;
+    //Utils::find(request.uploadedFiles(), "data", files);
+    if (files.empty()) {
+       response->set_status(seastar::http::reply::status_type::not_found);
+       return seastar::make_ready_future<std::unique_ptr<seastar::http::reply>>(std::move(response));
+    }
+
+    // check is js filter was used
+    auto filtFlag = request->get_query_param("filtered");
+    currentFile_->setIsFiltered((filtFlag != 0) && ((filtFlag) == "true"));
+
+    // add data to currentFile_
+    auto lastFlag = request->get_query_param("last");
+    bool isLast = (lastFlag == 0) || // if not present, assume not chunked
+                  (lastFlag != 0 && lastFlag == "true");
+    currentFile_->handleIncomingData(files[0], isLast);
+
+    if (isLast) {
+        parent_->proceedToNextFile();
+    }
+
+    response->set_mime_type("text/plain"); // else firefox complains
+
+    return seastar::make_ready_future<std::unique_ptr<seastar::http::reply>>(std::move(response));
+  }
+#ifdef CLASSIC_HANDLE
   virtual void handleRequest(const Http::Request &request,
                              Http::Response &response) override
   {
@@ -90,6 +144,7 @@ protected:
 
     response.setMimeType("text/plain"); // else firefox complains
   }
+#endif
 
 private:
   WFileDropWidget *parent_;

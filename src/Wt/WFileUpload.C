@@ -41,9 +41,12 @@ public:
   }
 
 protected:
-  virtual void handleRequest(const Http::Request& request,
-                             Http::Response& response) override
-  {
+
+
+#ifdef CLASSIC_HANDLE
+    virtual void handleRequest(const Http::Request& request,
+                               Http::Response& response) override
+    {
     bool triggerUpdate = false;
 
     std::vector<Http::UploadedFile> files;
@@ -53,8 +56,8 @@ protected:
     Utils::find(request.uploadedFiles(), "data", files);
 
     if (!request.tooLarge())
-      if (!files.empty() || request.getParameter("data"))
-        triggerUpdate = true;
+        if (!files.empty() || request.getParameter("data"))
+            triggerUpdate = true;
 
     response.setMimeType("text/html; charset=utf-8");
     response.addHeader("Expires", "Sun, 14 Jun 2020 00:00:00 GMT");
@@ -67,63 +70,161 @@ protected:
 #endif // WT_TARGET_JAVA
 
     o << "<!DOCTYPE html>"
-      "<html>\n"
-      "<head><script type=\"text/javascript\">\n"
-      "function load() { ";
+         "<html>\n"
+         "<head><script type=\"text/javascript\">\n"
+         "function load() { ";
 
     if (triggerUpdate || request.tooLarge()) {
-      UserAgent agent =
-          WApplication::instance()->environment().agent();
+        UserAgent agent =
+            WApplication::instance()->environment().agent();
 
-      if (triggerUpdate) {
-        LOG_DEBUG("Resource handleRequest(): signaling uploaded");
+        if (triggerUpdate) {
+            LOG_DEBUG("Resource handleRequest(): signaling uploaded");
 
-        // postMessage does not work for IE6,7
-        if (agent == UserAgent::IE6 ||
-            agent == UserAgent::IE7){
-          o << "window.parent."
-            << WApplication::instance()->javaScriptClass()
-            << "._p_.update(null, '"
-            << fileUpload_->uploaded().encodeCmd() << "', null, true);";
-        } else {
-          o << "window.parent.postMessage("
-            << "JSON.stringify({ fu: '" << fileUpload_->id() << "',"
-            << "  signal: '"
-            << fileUpload_->uploaded().encodeCmd()
-            << "',type: 'upload'"
-            << "}), '*');";
-        }
-      } else if (request.tooLarge()) {
-        LOG_DEBUG("Resource handleRequest(): signaling file-too-large");
+            // postMessage does not work for IE6,7
+            if (agent == UserAgent::IE6 ||
+                agent == UserAgent::IE7){
+                o << "window.parent."
+                  << WApplication::instance()->javaScriptClass()
+                  << "._p_.update(null, '"
+                  << fileUpload_->uploaded().encodeCmd() << "', null, true);";
+            } else {
+                o << "window.parent.postMessage("
+                  << "JSON.stringify({ fu: '" << fileUpload_->id() << "',"
+                  << "  signal: '"
+                  << fileUpload_->uploaded().encodeCmd()
+                  << "',type: 'upload'"
+                  << "}), '*');";
+            }
+        } else if (request.tooLarge()) {
+            LOG_DEBUG("Resource handleRequest(): signaling file-too-large");
 
-        // FIXME this should use postMessage() all the same
+            // FIXME this should use postMessage() all the same
 
-        std::string s = std::to_string(request.tooLarge());
+            std::string s = std::to_string(request.tooLarge());
 
-        // postMessage does not work for IE6,7
-        if (agent == UserAgent::IE6 ||
-            agent == UserAgent::IE7) {
+            // postMessage does not work for IE6,7
+            if (agent == UserAgent::IE6 ||
+                agent == UserAgent::IE7) {
 #ifndef WT_TARGET_JAVA
-          o << fileUpload_->fileTooLarge().createCall({s});
+                o << fileUpload_->fileTooLarge().createCall({s});
 #else
-          o << fileUpload_->fileTooLarge().createCall(s);
+                o << fileUpload_->fileTooLarge().createCall(s);
 #endif
-        } else
-          o << " window.parent.postMessage("
-            << "JSON.stringify({" << "fileTooLargeSize: '" << s
-            << "',type: 'file_too_large'" << "'}), '*');";
-      }
+            } else
+                o << " window.parent.postMessage("
+                  << "JSON.stringify({" << "fileTooLargeSize: '" << s
+                  << "',type: 'file_too_large'" << "'}), '*');";
+        }
     } else {
-      LOG_DEBUG("Resource handleRequest(): no signal");
+        LOG_DEBUG("Resource handleRequest(): no signal");
     }
 
     o << "}\n"
-      "</script></head>"
-      "<body onload=\"load();\"></body></html>";
+         "</script></head>"
+         "<body onload=\"load();\"></body></html>";
 
     if (!request.tooLarge() && !files.empty())
-      fileUpload_->setFiles(files);
+        fileUpload_->setFiles(files);
+    }
+
+#else
+  seastar::future<std::unique_ptr<seastar::http::reply> > handle(const seastar::sstring &path,
+                                                                std::unique_ptr<seastar::http::request> request,
+                                                                std::unique_ptr<seastar::http::reply> response) override
+  {
+    bool triggerUpdate = false;
+
+    std::vector<Http::UploadedFile> files;
+#ifdef WT_TARGET_JAVA
+    static Http::UploadedFile* uploaded;
+#endif
+    //Utils::find(request.uploadedFiles(), "data", files);
+
+//    if (!request.tooLarge())
+//        if (!files.empty() || !request->get_query_param("data").empty())
+//            triggerUpdate = true;
+
+    response->set_mime_type("text/html; charset=utf-8");
+    response->add_header("Expires", "Sun, 14 Jun 2020 00:00:00 GMT");
+    response->add_header("Cache-Control", "max-age=315360000");
+
+    if (triggerUpdate /*|| request.tooLarge()*/) {
+        UserAgent agent =
+            WApplication::instance()->environment().agent();
+
+        if (triggerUpdate) {
+            LOG_DEBUG("Resource handleRequest(): signaling uploaded");
+
+            // postMessage does not work for IE6,7
+            if (agent == UserAgent::IE6 ||
+                agent == UserAgent::IE7){
+                response->_content = fmt::format("<!DOCTYPE html>"
+                                                 "<html>\n"
+                                                 "<head><script type=\"text/javascript\">\n"
+                                                 "function load() {{ window.parent.{}._p_.update(null, '{}', null, true);"
+                                                 "}}\n"
+                                                 "</script></head>"
+                                                 "<body onload=\"load();\"></body></html>",
+                               WApplication::instance()->javaScriptClass(),
+                               fileUpload_->uploaded().encodeCmd());
+            } else {
+                response->_content = fmt::format("<!DOCTYPE html>"
+                                                 "<html>\n"
+                                                 "<head><script type=\"text/javascript\">\n"
+                                                 "function load() {{ window.parent.postMessage("
+                                                 "JSON.stringify({{ fu: '{}',"
+                                                 "  signal: '{}',type: 'upload'}}), '*');"
+                                                 "}}\n"
+                                                 "</script></head>"
+                                                 "<body onload=\"load();\"></body></html>",
+                               fileUpload_->id(),
+                               fileUpload_->uploaded().encodeCmd());
+            }
+        } /*else if (request.tooLarge()) {
+            LOG_DEBUG("Resource handleRequest(): signaling file-too-large");
+
+            // FIXME this should use postMessage() all the same
+
+            std::string s = std::to_string(request.tooLarge());
+
+            // postMessage does not work for IE6,7
+            if (agent == UserAgent::IE6 ||
+                agent == UserAgent::IE7) {
+#ifndef WT_TARGET_JAVA
+                response->_content = fmt::format( "<!DOCTYPE html>"
+                                                                       "<html>\n"
+                                                                       "<head><script type=\"text/javascript\">\n"
+                                                                       "function load() {{ {} }}\n"
+                                                                       "</script></head>"
+                                                                       "<body onload=\"load();\"></body></html>",
+                               fileUpload_->fileTooLarge().createCall({s}));
+#else
+                response->_content = fmt::format( "<!DOCTYPE html>"
+                                                                       "<html>\n"
+                                                                       "<head><script type=\"text/javascript\">\n"
+                                                                       "function load() {{ {} }}\n"
+                                                                       "</script></head>"
+                                                                       "<body onload=\"load();\"></body></html>",
+                               fileUpload_->fileTooLarge().createCall(s));
+#endif
+            } else
+            response->_content = fmt::format( "<!DOCTYPE html>"
+                                                                   "<html>\n"
+                                                                   "<head><script type=\"text/javascript\">\n"
+                                                                   "function load() {{  window.parent.postMessage("
+                                                                   "JSON.stringify({{ fileTooLargeSize: '{}',type: 'file_too_large'}}), '*'); }}\n"
+                                                                   "</script></head>"
+                                                                   "<body onload=\"load();\"></body></html>",
+                           s);
+        }*/
+    } else {
+        LOG_DEBUG("Resource handleRequest(): no signal");
+    }
+
+    return seastar::make_ready_future<std::unique_ptr<seastar::http::reply>>(std::move(response));
   }
+#endif
 
 private:
   WFileUpload *fileUpload_;

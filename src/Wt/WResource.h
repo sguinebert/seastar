@@ -18,6 +18,9 @@
 #include <mutex>
 #endif // WT_THREADED
 
+//#include <seastar/websocket/server.hh>
+#include <seastar/http/handlers.hh>
+
 namespace Wt {
 
   class WebRequest;
@@ -29,7 +32,7 @@ namespace Wt {
     class Response;
     class ResponseContinuation;
 
-    typedef std::shared_ptr<ResponseContinuation> ResponseContinuationPtr;
+    typedef seastar::shared_ptr<ResponseContinuation> ResponseContinuationPtr;
   }
 
 /*! \brief Values for the disposition type in the Content-Disposition header
@@ -174,7 +177,7 @@ private:
  *
  * \sa WAnchor, WImage
  */
-class WT_API WResource : public WObject
+class WT_API WResource : public WObject, public seastar::httpd::handler_base
 {
 public:
   /*! \brief Creates a new resource.
@@ -381,8 +384,14 @@ public:
    * not being concurrently deleted, but multiple requests may happend
    * simultaneously for a single resource.
    */
+#ifdef CLASSIC_HANDLE
   virtual void handleRequest(const Http::Request& request,
                              Http::Response& response) = 0;
+#else
+  virtual seastar::future<std::unique_ptr<seastar::http::reply>> handle(const seastar::sstring& path,
+                                                      std::unique_ptr<seastar::http::request> req,
+                                                      std::unique_ptr<seastar::http::reply> rep) = 0;
+#endif
 
   /*! \brief Handles a continued request being aborted.
    *
@@ -486,6 +495,8 @@ private:
   void handle(WebRequest *webRequest, WebResponse *webResponse,
               Http::ResponseContinuationPtr continuation
                 = Http::ResponseContinuationPtr());
+
+  void handle(WebRequest *webRequest);
 
   Wt::WString suggestedFileName_;
   ContentDisposition dispositionType_;

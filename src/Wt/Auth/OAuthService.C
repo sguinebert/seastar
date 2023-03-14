@@ -71,7 +71,7 @@ public:
 
     o << "<html><body>OAuth error</body></html>";
   }
-
+#ifdef CLASSIC_HANDLE
   virtual void handleRequest(const Http::Request& request,
                              Http::Response& response) override
   {
@@ -80,8 +80,8 @@ public:
 #endif
       response.setMimeType("text/html; charset=UTF-8");
 
-      const std::string *stateE = request.getParameter("state");
-      if (!stateE || *stateE != process_->oAuthState_) {
+      auto stateE = request->get_query_param("state");
+      if (!stateE || stateE != process_->oAuthState_) {
         LOG_ERROR(ERROR_MSG("invalid-state") <<
                   ", state: " << (stateE ? *stateE : "(empty)"));
         process_->setError(ERROR_MSG("invalid-state"));
@@ -117,13 +117,97 @@ public:
       sendResponse(response);
   }
 
-  void sendResponse(Http::Response& response)
+  void sendResponse(seastar::http::reply* response)
   {
+    #ifndef WT_TARGET_JAVA
+        std::ostream& o = response.out();
+    #else
+        std::ostream o(response.out());
+    #endif // WT_TARGET_JAVA
+
+    WApplication *app = WApplication::instance();
+    const bool usePopup = app->environment().ajax() && process_->service_.popupEnabled();
+
+    if (!usePopup) {
 #ifndef WT_TARGET_JAVA
-    std::ostream& o = response.out();
+      WApplication::UpdateLock lock(app);
+#endif
+      process_->doneCallbackConnection_ =
+          app->unsuspended().connect(process_, &OAuthProcess::onOAuthDone);
+
+      std::string redirectTo = app->makeAbsoluteUrl(app->url(process_->startInternalPath_));
+
+            o <<
+              "<!DOCTYPE html>"
+              "<html lang=\"en\" dir=\"ltr\">\n"
+              "<head><meta http-equiv=\"refresh\" content=\"0; url="
+              << redirectTo << "\" /></head>\n"
+              "<body><p><a href=\"" << redirectTo
+              << "\"> Click here to continue</a></p></body></html>";
+    } else {
+      std::string appJs = app->javaScriptClass();
+
+            o <<
+              "<!DOCTYPE html>"
+              "<html lang=\"en\" dir=\"ltr\">\n"
+              "<head><title></title>\n"
+              "<script type=\"text/javascript\">\n"
+              "function load() { "
+              """if (window.opener." << appJs << ") {"
+              ""  "var " << appJs << "= window.opener." << appJs << ";"
+      #ifndef WT_TARGET_JAVA
+              <<  process_->redirected_.createCall({}) << ";"
+      #else // WT_TARGET_JAVA
+              <<  process_->redirected_.createCall() << ";"
+      #endif // WT_TARGET_JAVA
+              ""  "window.close();"
+              "}\n"
+              "}\n"
+              "</script></head>"
+              "<body onload=\"load();\"></body></html>";
+    }
+  }
 #else
-    std::ostream o(response.out());
-#endif // WT_TARGET_JAVA
+  virtual seastar::future<std::unique_ptr<seastar::http::reply>> handle(const seastar::sstring& path,
+                                                                        std::unique_ptr<seastar::http::request> request,
+                                                                        std::unique_ptr<seastar::http::reply> response) override
+  {
+      response->set_mime_type("text/html; charset=UTF-8");
+
+      auto stateE = request->get_query_param("state");
+      if (stateE.empty() || stateE != process_->oAuthState_) {
+        LOG_ERROR(ERROR_MSG("invalid-state") <<
+                  ", state: " << (!stateE.empty() ? stateE.c_str() : "(empty)"));
+        process_->setError(ERROR_MSG("invalid-state"));
+        response->set_status(seastar::http::reply::status_type::internal_server_error, "<html><body>OAuth error</body></html>");
+        return seastar::make_ready_future<std::unique_ptr<seastar::http::reply>>(std::move(response));
+      }
+
+      auto errorE = request->get_query_param("error");
+      if (!errorE.empty()) {
+        LOG_ERROR(ERROR_MSG(+ errorE));
+        process_->setError(ERROR_MSG(+ errorE));
+        response->set_status(seastar::http::reply::status_type::internal_server_error, "<html><body>OAuth error</body></html>");
+        //sendError(response);
+                return seastar::make_ready_future<std::unique_ptr<seastar::http::reply>>(std::move(response));
+      }
+
+      auto codeE = request->get_query_param("code");
+      if (codeE.empty()) {
+        LOG_ERROR(ERROR_MSG("missing-code"));
+        process_->setError(ERROR_MSG("missing-code"));
+        response->set_status(seastar::http::reply::status_type::internal_server_error, "<html><body>OAuth error</body></html>");
+        return seastar::make_ready_future<std::unique_ptr<seastar::http::reply>>(std::move(response));
+      }
+
+      process_->requestToken(codeE); // Blocking in JWt, so no continuation necessary
+
+      sendResponse(response.get());
+
+      return seastar::make_ready_future<std::unique_ptr<seastar::http::reply>>(std::move(response));
+  }
+  void sendResponse(seastar::http::reply* response)
+  {
 
     WApplication *app = WApplication::instance();
     const bool usePopup = app->environment().ajax() && process_->service_.popupEnabled();
@@ -136,36 +220,28 @@ public:
         app->unsuspended().connect(process_, &OAuthProcess::onOAuthDone);
 
       std::string redirectTo = app->makeAbsoluteUrl(app->url(process_->startInternalPath_));
-      o <<
-        "<!DOCTYPE html>"
-        "<html lang=\"en\" dir=\"ltr\">\n"
-        "<head><meta http-equiv=\"refresh\" content=\"0; url="
-        << redirectTo << "\" /></head>\n"
-        "<body><p><a href=\"" << redirectTo
-        << "\"> Click here to continue</a></p></body></html>";
+
+      response->_content = fmt::format( "<!DOCTYPE html><html lang=\"en\" dir=\"ltr\">\n"
+                                                             "<head><meta http-equiv=\"refresh\" content=\"0; url="
+                                                             "{}\" /></head>\n"
+                                                             "<body><p><a href=\"{}"
+                                                             "\"> Click here to continue</a></p></body></html>", redirectTo, redirectTo);
     } else {
       std::string appJs = app->javaScriptClass();
-      o <<
-        "<!DOCTYPE html>"
-        "<html lang=\"en\" dir=\"ltr\">\n"
-        "<head><title></title>\n"
-        "<script type=\"text/javascript\">\n"
-        "function load() { "
-        """if (window.opener." << appJs << ") {"
-        ""  "var " << appJs << "= window.opener." << appJs << ";"
-#ifndef WT_TARGET_JAVA
-        <<  process_->redirected_.createCall({}) << ";"
-#else // WT_TARGET_JAVA
-        <<  process_->redirected_.createCall() << ";"
-#endif // WT_TARGET_JAVA
-        ""  "window.close();"
-        "}\n"
-        "}\n"
-        "</script></head>"
-        "<body onload=\"load();\"></body></html>";
+
+      response->_content = fmt::format( "<!DOCTYPE html><html lang=\"en\" dir=\"ltr\">\n<head><title></title>\n<script type=\"text/javascript\">\n"
+                                                             "function load() {{ "
+                                                             "if (window.opener.{}) {{"
+                                                             "var {}= window.opener.{};{};"
+                                                             "window.close();"
+                                                             "}}\n"
+                                                             "}}\n"
+                                                             "</script></head>"
+                                                             "<body onload=\"load();\"></body></html>", appJs, appJs, appJs, process_->redirected_.createCall({}));
+
     }
   }
-
+#endif
 private:
   OAuthProcess *process_;
 };
@@ -567,42 +643,47 @@ struct OAuthService::Impl
     {
       beingDeleted();
     }
+#ifdef CLASSIC_HANDLE
 
-    virtual void handleRequest(const Http::Request& request,
-                               Http::Response& response) override
+#else
+
+    virtual seastar::future<std::unique_ptr<seastar::http::reply>> handle(const seastar::sstring& path,
+                                                                          std::unique_ptr<seastar::http::request> request,
+                                                                          std::unique_ptr<seastar::http::reply> response) override
     {
-      const std::string *stateE = request.getParameter("state");
+      auto stateE = request->get_query_param("state");
 
-      if (stateE) {
-        std::string redirectUrl = service_.decodeState(*stateE);
+      if (!stateE.empty()) {
+        std::string redirectUrl = service_.decodeState(stateE);
 
         if (!redirectUrl.empty()) {
           bool hasQuery = redirectUrl.find('?') != std::string::npos;
           redirectUrl += (hasQuery ? '&' : '?');
-          redirectUrl += "state=" + Wt::Utils::urlEncode(*stateE);
+          redirectUrl += "state=" + Wt::Utils::urlEncode(std::string_view(stateE));
 
-          const std::string *errorE = request.getParameter("error");
-          if (errorE)
-            redirectUrl += "&error=" + Wt::Utils::urlEncode(*errorE);
+          auto errorE = request->get_query_param("error");
+          if (!errorE.empty())
+              redirectUrl += "&error=" + Wt::Utils::urlEncode(std::string_view(errorE));
 
-          const std::string *codeE = request.getParameter("code");
-          if (codeE)
-            redirectUrl += "&code=" + Wt::Utils::urlEncode(*codeE);
+          auto codeE = request->get_query_param("code");
+          if (!codeE.empty())
+            redirectUrl += "&code=" + Wt::Utils::urlEncode(std::string_view(codeE));
 
-          response.setStatus(302);
-          response.addHeader("Location", redirectUrl);
-          return;
+          response->set_status(seastar::http::reply::status_type::moved_temporarily);
+          response->add_header("Location", redirectUrl);
+          return seastar::make_ready_future<std::unique_ptr<seastar::http::reply>>(std::move(response));
         } else
-          LOG_ERROR("RedirectEndpoint: could not decode state " << *stateE);
+          LOG_ERROR("RedirectEndpoint: could not decode state " << stateE.c_str());
       } else
         LOG_ERROR("RedirectEndpoint: missing state");
 
-      response.setStatus(400);
-      response.setMimeType("text/html");
-      response.out() << "<html><body>"
-                     << "<h1>OAuth Authentication error</h1>"
-                     << "</body></html>";
+      response->set_status(seastar::http::reply::status_type::bad_request);
+      response->write_body("text/html", "<html><body>"
+                                        "<h1>OAuth Authentication error</h1>"
+                                        "</body></html>");
+      return seastar::make_ready_future<std::unique_ptr<seastar::http::reply>>(std::move(response));
     }
+#endif
 
   private:
     const OAuthService& service_;

@@ -89,7 +89,7 @@ const std::vector<unsigned char> WMemoryResource::data() const
   else
     return *data;
 }
-
+#ifdef CLASSIC_HANDLE
 void WMemoryResource::handleRequest(const Http::Request& request,
                                     Http::Response& response)
 {
@@ -109,5 +109,28 @@ void WMemoryResource::handleRequest(const Http::Request& request,
   for (unsigned int i = 0; i < (*data).size(); ++i)
     response.out().put((*data)[i]);
 }
+#else
+seastar::future<std::unique_ptr<seastar::http::reply> > WMemoryResource::handle(const seastar::sstring &path,
+                                                                               std::unique_ptr<seastar::http::request> request,
+                                                                               std::unique_ptr<seastar::http::reply> response)
+{
+  DataPtr data;
+  {
+#ifdef WT_THREADED
+    std::unique_lock<std::mutex> l(*dataMutex_);
+#endif
+    data = data_;
+  }
+
+  if (!data)
+    return seastar::make_ready_future<std::unique_ptr<seastar::http::reply>>(std::move(response));
+
+  response->set_mime_type(mimeType_);
+
+//  for (unsigned int i = 0; i < (*data).size(); ++i)
+//    response.out().put((*data)[i]);
+  return seastar::make_ready_future<std::unique_ptr<seastar::http::reply>>(std::move(response));
+}
+#endif
 
 }
